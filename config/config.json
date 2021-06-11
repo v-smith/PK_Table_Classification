@@ -1,0 +1,20 @@
+{
+  "run_name": "trial-FFNN-classification",
+  "base_model": "dmis-lab/biobert-v1.1",
+  "tag_type": "bio",
+  "max_length": 128,
+  "learning_rate": 2e-5,
+  "batch_size": 20,
+  "val_batch_size": 60,
+  "max_epochs": 40,
+  "seed": 48,
+  "eps": 1e-8,
+  "early_stopping": false,
+  "early_stopping_patience": 5,
+  "tensorboard_logger": true,
+  "n_workers_dataloader": 1,
+  "gpus": false,
+  "use_gru": false,
+  "lr_warmup": false,
+  "gradient_clip_val": 1.0
+}
