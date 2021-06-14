@@ -63,40 +63,13 @@ def make_dataloader(inp_samples: List[Dict], batch_size: int, inp_tokenizer: str
     return loader
 
 
-def process_table_data(inp_samples: List[Dict], inp_tokenizer: str, max_len: int,
-                       dataset_name: str) -> Dataset:
-    """
-    Generates a pytorch dataset containing encoded tokens and labels
-    """
-
-    print(f"\n==== {dataset_name.upper()} set ====")
-    htmls = [sample["html"] for sample in inp_samples]
-    htmls = preprocess_htmls(inp_samples)
-
-    labels = [sample["accept"] for sample in inp_samples]
-    labels = convert_labels(inp_labels=labels)
-
-    tokenizer = Tokenizer.from_file(inp_tokenizer)
-    table_encodings = tokenizer(htmls, padding=True, truncation=True, max_length=max_len,
-                                  return_overflowing_tokens=True)
-    all_tokens = extract_all_tokens_withoutpad(table_encodings.encodings)
-    print_token_stats(all_tokens=all_tokens, dataset_name=dataset_name,
-                      max_len=max_len, plot_histogram=True)
-
-    print(f"Number of sentences : {len(all_tokens)}")
-
-    print_few_mentions(all_tokens=all_tokens, labels=labels, n=5)
-
-    encoded_labels = pad_and_encode_labels(all_labels=labels,
-                                           max_len=max_len,
-                                           tag2id=tag2id)
-
-    torch_dataset = PKDataset(encodings=doc_encodings, labels=encoded_labels)
-
-    return torch_dataset
-
-def extract_all_tokens_withoutpad(html_encodings: List[Encoding]):
-    return [[t for t in enc.tokens if t != '[PAD]'] for enc in html_encodings]
+#checked this and works
+def extract_all_ids_withoutpad(html_encodings: List[Encoding]):
+    ids_list= []
+    for l in html_encodings:
+        no_pads= [i for i in l if i != 5000]
+        ids_list.append(no_pads)
+    return ids_list
 
 #checked this and it works!
 def convert_labels(all_labels: List[List[str]],  max_len: int):
@@ -107,3 +80,18 @@ def convert_labels(all_labels: List[List[str]],  max_len: int):
         assert len(i) == max_length
     print(all_transformed_labels[1:4])
     return all_transformed_labels
+
+#checked this and works
+def print_token_stats(all_tokens: List[List[str]], dataset_name: str,
+                      plot_histogram: bool = False):
+    n_tokens = []
+    for tokens in all_tokens:
+        nt = len(tokens)
+        n_tokens.append(nt)
+    if plot_histogram:
+        plt.hist(n_tokens, bins=50)
+        plt.title(f"Number of bert tokens in the {dataset_name.upper()} set")
+        plt.xlabel("# tokens")
+        plt.ylabel("# sentences")
+        plt.show()
+        plt.close()

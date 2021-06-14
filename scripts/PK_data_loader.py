@@ -29,10 +29,23 @@ class PKTestDataset():
         return len(self.html)
 
 
+class PKDataset(Dataset):
+    def __init__(self, encodings, labels):
+        self.encodings = encodings
+        self.labels = labels
+
+    def __getitem__(self, idx):
+        item = {key: torch.tensor(val[idx]) for key, val in self.encodings.items()}
+        item['labels'] = torch.tensor(self.labels[idx])
+        return item
+
+    def __len__(self):
+        return len(self.labels)
+
 labels_dataset = pd.read_csv('../data/final-test-covs100.csv', sep=',')
 y= labels_dataset.iloc[:, 2:].to_numpy()
 
-test_dataset = PKTestDataset("../data/final-test-covs100html.txt", y, )
+test_dataset = PKDataset("../data/final-test-covs100html.txt", y)
 
 first_data = test_dataset[0]
 features, labels = first_data
