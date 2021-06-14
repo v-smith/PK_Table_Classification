@@ -1,6 +1,4 @@
 import torch
-import pandas as pd
-from tokenizers import Tokenizer
 import torch.nn as nn
 
 '''
@@ -27,42 +25,6 @@ learning_rate = 0.001
 
 
 #data
-class PKDataset():
-
-    def __init__(self, html, targets):
-        self.tokenizer = Tokenizer.from_file("../tokenizers/tokenizerPKtablesSpecialTokens5000.json")
-        self.html = torch.tensor(self.tokenizer.encode(html).ids) #padding #truncation??
-        self.targets = torch.from_numpy(targets) # size [n_samples, n_labels]
-
-    # support indexing such that dataset[i] can be used to get i-th sample
-    def __getitem__(self, index):
-        return self.html[index], self.targets[index]
-
-    def __len__(self):
-        return len(self.html)
-
-
-train_labels_dataset = pd.read_csv('../data/final-test-covs200A.csv', sep=',')
-train_y= train_labels_dataset.iloc[:, 2:].to_numpy()
-train_dataset= PKDataset("../data/final-test-covs200Ahtml.txt", train_y)
-
-test_labels_dataset = pd.read_csv('../data/final-test-covs100.csv', sep=',')
-test_y= test_labels_dataset.iloc[:, 2:].to_numpy()
-test_dataset = PKDataset("../data/final-test-covs100html.txt", test_y)
-
-# Data loader
-train_loader = torch.utils.data.DataLoader(dataset=train_dataset,
-                                           batch_size=batch_size,
-                                           shuffle=True)
-
-test_loader = torch.utils.data.DataLoader(dataset=test_dataset,
-                                          batch_size=batch_size,
-                                          shuffle=False)
-
-
-examples = iter(test_loader)
-samples, labels = examples.next()
-print(samples.shape, labels.shape)
 
 
 # Fully connected neural network with one hidden layer

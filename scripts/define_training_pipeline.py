@@ -39,9 +39,6 @@ class LinearRegression(nn.Module):
 
 model= LinearRegression(input_size, output_size)
 
-
-
-
 print(f'Pred before training: f(5) = {model(X_test).item():.3f}')
 
 # Training

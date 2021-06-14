@@ -68,4 +68,4 @@ def preprocess_data(input_file, output_labels, output_html):
     write_to_text(input_file, output_html)
 
 #run
-preprocess_data("../data/final-test-covs200A.jsonl", "../data/final-test-covs200A.csv", "../data/final-test-covs200Ahtml.txt")
+#preprocess_data("../data/final-test-covs200A.jsonl", "../data/final-test-covs200A.csv", "../data/final-test-covs200Ahtml.txt")
