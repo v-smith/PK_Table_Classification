@@ -1,1 +1,12 @@
 setuptools==52.0.0
+
+torchvision~=0.6.1+cu101
+matplotlib~=3.4.2
+numpy~=1.20.3
+pandas~=1.2.4
+tokenizers~=0.10.3
+jsonlines~=2.0.0
+ujson~=4.0.2
+sklearn~=0.0
+scikit-learn~=0.24.2
+transformers~=4.6.1

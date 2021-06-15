@@ -1,0 +1,138 @@
+# imports
+from table_data_loaders import get_dataloaders
+from table_data_loaders import process_table_data
+from table_data_loaders import NeuralNet
+import torch
+import torch.nn as nn
+from transformers import PreTrainedTokenizerFast
+from tqdm import tqdm
+import torch.optim as optim
+import pandas as pd
+import matplotlib.pyplot as plt
+import matplotlib
+from tableclass_engine_FFNN import train, validate
+from tableclass_engine_FFNN import calculate_metrics
+import numpy as np
+
+matplotlib.style.use('ggplot')
+
+'''
+STEPS
+# 1. Data,
+# 2. DataLoader, Transformation,
+# 3. Multilayer NN. ac func
+# 4. loss and optimizer
+# 5. training loop,
+# 6. model eval,
+# 7. GPU support
+'''
+
+# ============ Set a value =============== #
+torch.manual_seed(48)
+
+# ============ Load and Check Tokenizer =========== #
+tokenizer = PreTrainedTokenizerFast(tokenizer_file="../tokenizers/tokenizerPKtablesSpecialTokens5000.json")
+tokenizer.add_special_tokens({'pad_token': '[PAD]'})
+
+# ============ Get data loaders and datasets =============== #
+
+train_dataloader, train_dataset, valid_dataloader, valid_dataset, test_dataloader, test_dataset = get_dataloaders(inp_data_dir="../data/",
+                                                                       inp_tokenizer="../tokenizers/tokenizerPKtablesSpecialTokens5000.json",
+                                                                       max_len=500, batch_size=50, val_batch_size=100,
+                                                                       n_workers=0)
+
+
+# ============ Set Config =============== #
+
+# device config
+# device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = 'cpu'
+
+input_size = 500  # size of the 1d tensor
+# hidden_size = 100
+num_classes = 6
+hidden_size = 100
+epochs = 10
+batch_size = 50
+lr = 0.001
+embeds_size = 110
+vocab_size = tokenizer.vocab_size + len(tokenizer.all_special_tokens)
+padding_idx = tokenizer.pad_token_id
+
+torch.autograd.set_detect_anomaly(True)
+
+# ============ Get Model =============== #
+model = NeuralNet(input_size=input_size, num_classes=6, embeds_size=embeds_size, vocab_size=vocab_size,
+                  padding_idx=padding_idx, hidden_size=hidden_size)  # .to(device)
+
+# ============ Define Loss and Optimiser =============== #
+criterion = nn.BCELoss()
+optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+
+# ============ Training and Val Loop  =============== #
+train_loss = []
+valid_loss = []
+for epoch in range(epochs):
+    print(f"Epoch {epoch+1} of {epochs}")
+    train_epoch_loss = train(
+        model, train_dataloader, optimizer, criterion, train_dataset, device
+    )
+    valid_epoch_loss = validate(
+        model, valid_dataloader, criterion, valid_dataset, device
+    )
+    train_loss.append(train_epoch_loss)
+    valid_loss.append(valid_epoch_loss)
+    print(f"Train Loss: {train_epoch_loss:.4f}")
+    print(f'Val Loss: {valid_epoch_loss:.4f}')
+
+# ============ Save Model  =============== #
+torch.save({
+            'epoch': epochs,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'loss': criterion,
+            }, '../data/outputs/model.pth')
+# plot and save the train and validation line graphs
+plt.figure(figsize=(10, 7))
+plt.plot(train_loss, color='orange', label='train loss')
+plt.plot(valid_loss, color='red', label='validataion loss')
+plt.xlabel('Epochs')
+plt.ylabel('Loss')
+plt.legend()
+plt.savefig('../data/outputs/loss.png')
+plt.show()
+
+# ============ Test Loop  =============== #
+
+# load the model checkpoint
+checkpoint = torch.load('../data/outputs/model.pth')
+# load model weights state_dict
+model.load_state_dict(checkpoint['model_state_dict'])
+model.eval()
+
+for counter, data in enumerate(test_dataloader):
+    # get all the index positions where value == 1
+    # target_indices = [i for i in range(len(target[0])) if target[0][i] == 1]
+    # get the predictions by passing the image through the model
+
+    n_samples = 0
+    #work out how to initiate loop
+    for batch in test_dataloader:
+        input_ids, target = data['input_ids'].to(device), data['labels']
+        outputs = model(input_ids)
+        outputs = torch.sigmoid(outputs)
+        outputs = outputs.detach().cpu()
+        n_samples += labels.size(0)
+        n_correct = 0
+        #for each label in the number of labels ... do something
+        for label in labels:
+            n_correct += (predicted == labels).sum().item()
+            acc = 100.0 * n_correct / n_samples
+            print(label, acc)
+
+    #result = calculate_metrics(np.array(outputs), np.array(target))
+    #print("micro f1: {:.3f} ", "macro f1: {:.3f} ", "samples f1: {:.3f}".format(
+        #result['micro/f1'], result['macro/f1'], result['samples/f1']))
+
+
+    #calculate_metrics(outputs)

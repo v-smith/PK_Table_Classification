@@ -3,7 +3,6 @@ import re
 import ujson
 from pathlib import Path
 from typing import Dict, List, Iterable
-
 from torch import nn
 from transformers import PreTrainedTokenizerFast
 from torch.utils.data import DataLoader, Dataset
@@ -19,7 +18,7 @@ def convert_labels(inp_labels: List[List[str]]):
     """Transforms labels to vector of binary numbers"""
     mlb = MultiLabelBinarizer()
     all_transformed_labels = mlb.fit_transform(inp_labels)
-    all_transformed_labels= list(all_transformed_labels)
+    all_transformed_labels = list(all_transformed_labels)
     # print(all_transformed_labels[1:4])
     return all_transformed_labels
 
@@ -36,7 +35,7 @@ def preprocess_htmls(inp_samples: List[str]):
     return processed_htmls
 
 
-def print_token_stats(all_tokens: List[List[str]], dataset_name: str,
+def print_token_stats(all_tokens: List[List[int]], dataset_name: str,
                       plot_histogram: bool = False):
     n_tokens = []
     for tokens in all_tokens:
@@ -108,7 +107,7 @@ def process_table_data(inp_samples: List[Dict], inp_tokenizer: str, max_len: int
 
 
 def make_dataloader(inp_samples: List[Dict], batch_size: int, inp_tokenizer: str, max_len: int,
-                    shuffle: bool, n_workers: int, dataset_name: str) -> DataLoader:
+                    shuffle: bool, n_workers: int, dataset_name: str) -> [DataLoader, PKDataset]:
     torch_dataset = process_table_data(inp_samples=inp_samples, inp_tokenizer=inp_tokenizer, max_len=max_len,
                                        dataset_name=dataset_name)
     if shuffle:
@@ -117,7 +116,7 @@ def make_dataloader(inp_samples: List[Dict], batch_size: int, inp_tokenizer: str
     else:
         loader = DataLoader(torch_dataset, batch_size=batch_size, num_workers=n_workers)
 
-    return loader
+    return loader, torch_dataset
 
 
 def read_jsonl(file_path):
@@ -134,10 +133,11 @@ def read_jsonl(file_path):
                 continue
 
 
-def read_dataset(data_dir_inp: str, dataset_name: str) -> List[Dict]:
+def read_dataset(data_dir_inp: str, dataset_name: str):
     file_name = f"{dataset_name}.jsonl"
     file_path = os.path.join(data_dir_inp, file_name)
-    return read_jsonl(file_path=file_path)
+    json_list = read_jsonl(file_path=file_path)
+    return json_list
 
 
 def get_dataloaders(inp_data_dir: str, inp_tokenizer: str, max_len: int,
@@ -160,33 +160,39 @@ def get_dataloaders(inp_data_dir: str, inp_tokenizer: str, max_len: int,
     valid_samples = [{"html": dic["html"], "accept": dic["accept"]} for dic in valid_samples]
     test_samples = [{"html": dic["html"], "accept": dic["accept"]} for dic in test_samples]
 
-    train_dataloader = make_dataloader(inp_samples=train_samples, batch_size=batch_size, inp_tokenizer=inp_tokenizer,
-                                       max_len=max_len, shuffle=True, n_workers=n_workers,
-                                       dataset_name='training')
-    valid_dataloader = make_dataloader(inp_samples=valid_samples, batch_size=val_batch_size,
-                                       inp_tokenizer=inp_tokenizer,
-                                       max_len=max_len, shuffle=False, n_workers=n_workers,
-                                       dataset_name='dev')
-    test_dataloader = make_dataloader(inp_samples=test_samples, batch_size=val_batch_size, inp_tokenizer=inp_tokenizer,
-                                      max_len=max_len, shuffle=False, n_workers=n_workers,
-                                      dataset_name='test')
+    train_dataloader, train_dataset = make_dataloader(inp_samples=train_samples, batch_size=batch_size,
+                                                      inp_tokenizer=inp_tokenizer,
+                                                      max_len=max_len, shuffle=True, n_workers=n_workers,
+                                                      dataset_name='training')
+    valid_dataloader, valid_dataset = make_dataloader(inp_samples=valid_samples, batch_size=val_batch_size,
+                                                      inp_tokenizer=inp_tokenizer,
+                                                      max_len=max_len, shuffle=False, n_workers=n_workers,
+                                                      dataset_name='dev')
+    test_dataloader, test_dataset = make_dataloader(inp_samples=test_samples, batch_size=val_batch_size,
+                                                    inp_tokenizer=inp_tokenizer,
+                                                    max_len=max_len, shuffle=False, n_workers=n_workers,
+                                                    dataset_name='test')
 
-    return train_dataloader, valid_dataloader, test_dataloader
-
+    return train_dataloader, train_dataset, valid_dataloader, valid_dataset, test_dataloader, test_dataset
 
 
 # Fully connected neural network with one hidden layer
 class NeuralNet(nn.Module):
-    def __init__(self, input_size, num_classes, embeds_size, vocab_size, padding_idx):
+    def __init__(self, input_size, num_classes, hidden_size, embeds_size, vocab_size, padding_idx):
         super(NeuralNet, self).__init__()
         self.embedding = torch.nn.Embedding(vocab_size, embeds_size, padding_idx=padding_idx)
-        self.l1 = nn.Linear(embeds_size, num_classes)
-        # self.l2 = nn.Linear(hidden_size, num_classes)
+        self.l1 = nn.Linear(embeds_size, hidden_size)  # or number of classes if only one layer
+        self.relu = nn.ReLU()
+        self.l2 = nn.Linear(hidden_size, num_classes)
+        # do this to fit with tableclass_train_FFNN.py
+        self.double()
 
     def forward(self, x):
         embeddings = self.embedding(x)
         max_pooled = torch.max(embeddings, dim=1, keepdim=False)[0]
         out_l1 = self.l1(max_pooled)
+        out_relu = self.relu(out_l1)
+        out_l2 = self.l2(out_relu)
         # out_final = self.l2(out_relu)
         # no activation and no softmax at the end
-        return out_l1
+        return out_l2
