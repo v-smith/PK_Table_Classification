@@ -1,5 +1,5 @@
-from table_data_loaders import get_dataloaders
-from table_data_loaders import NeuralNet
+from data_loaders.table_data_loaders import get_dataloaders
+from data_loaders.table_data_loaders import NeuralNet
 import torch
 import torch.nn as nn
 from transformers import PreTrainedTokenizerFast
@@ -14,7 +14,7 @@ tokenizer.add_special_tokens({'pad_token': '[PAD]'})
 
 # ============ Get data loaders =============== #
 
-train_dataloader, train_dataset, valid_dataloader, valid_dataset, test_dataloader, test_dataset = get_dataloaders(inp_data_dir="../data/",
+train_dataloader, train_dataset, valid_dataloader, valid_dataset, test_dataloader, test_dataset = get_dataloaders(inp_data_dir="../data/train-test-val/",
                                                                        inp_tokenizer="../tokenizers/tokenizerPKtablesSpecialTokens5000.json",
                                                                        max_len=500, batch_size=50, val_batch_size=100,
                                                                        n_workers=0)
@@ -26,8 +26,8 @@ train_dataloader, train_dataset, valid_dataloader, valid_dataset, test_dataloade
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 input_size = 500  # size of the 1d tensor
-# hidden_size = 100
-num_classes = 6
+hidden_size = 100
+num_classes = 10
 num_epochs = 10
 batch_size = 50
 learning_rate = 0.001
@@ -38,8 +38,8 @@ padding_idx = tokenizer.pad_token_id
 torch.autograd.set_detect_anomaly(True)
 
 # ============ Get Model =============== #
-model = NeuralNet(input_size=input_size, num_classes=6, embeds_size=embeds_size, vocab_size=vocab_size,
-                  padding_idx=padding_idx) #.to(device)
+model = NeuralNet(input_size=input_size, num_classes=num_classes, embeds_size=embeds_size, vocab_size=vocab_size,
+                  padding_idx=padding_idx, hidden_size=hidden_size) #.to(device)
 
 
 # ============ Define Loss and Optimiser =============== #
@@ -53,7 +53,7 @@ model.train()
 for epoch in range(num_epochs):
     print(f"Epoch {epoch + 1} of {num_epochs}")
     epoch_loss = []
-    for batch in dataloaders_train:
+    for batch in train_dataloader:
         input_ids = batch["input_ids"] #.to(device)
         labels = batch["labels"] #.to(device)
 
@@ -71,11 +71,11 @@ for epoch in range(num_epochs):
 # ============ Define Val Loop =============== #
 # pass logits through sigmoid.... on validation set
 
-
+'''
 # ============ Define Test Loop =============== #
 outputs = []
 with torch.no_grad():
-    for i, batch in tqdm(enumerate(dataloaders_train)):
+    for i, batch in tqdm(enumerate(train_dataloader)):
         input_ids = batch["input_ids"] #.to(device)
         labels = batch["labels"] #.to(device)
         output = model(input_ids)
@@ -85,7 +85,7 @@ with torch.no_grad():
         #n_samples += labels.size(0)
         #n_correct += (predicted == labels).sum().item()
 
-'''
+
 outputs = torch.cat(outputs)
 outputs = torch.sigmoid(outputs)
 outputs = outputs.cpu().detach().numpy()

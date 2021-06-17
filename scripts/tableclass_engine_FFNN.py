@@ -58,3 +58,13 @@ def calculate_metrics(pred, target, threshold=0.5):
             'samples/precision': precision_score(y_true=target, y_pred=pred, average='samples'),
             'samples/recall': recall_score(y_true=target, y_pred=pred, average='samples'),
             'samples/f1': f1_score(y_true=target, y_pred=pred, average='samples'),}
+
+def metrics(gt_S,pred_S):
+    gt_S  =np.asarray(gt_S)
+    pred_S=np.round(pred_S)
+    acc =  accuracy_score(gt_S,pred_S)
+    f1m = f1_score(gt_S,pred_S,average = 'macro', zero_division=1)
+    f1mi = f1_score(gt_S,pred_S,average = 'micro', zero_division=1)
+    print('f1_Macro_Score{}'.format(f1m))
+    print('f1_Micro_Score{}'.format(f1mi))
+    print('Accuracy{}'.format(acc))

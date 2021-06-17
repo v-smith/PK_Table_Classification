@@ -152,9 +152,9 @@ def get_dataloaders(inp_data_dir: str, inp_tokenizer: str, max_len: int,
     @param n_workers: number of workers for the dataloader
     @return: pytorch data loaders
     """
-    train_samples = list(read_dataset(data_dir_inp=inp_data_dir, dataset_name="final-test-covs100"))
-    valid_samples = list(read_dataset(data_dir_inp=inp_data_dir, dataset_name="final-test-covs100"))
-    test_samples = list(read_dataset(data_dir_inp=inp_data_dir, dataset_name="final-test-covs100"))
+    train_samples = list(read_dataset(data_dir_inp=inp_data_dir, dataset_name="builder_train800"))
+    valid_samples = list(read_dataset(data_dir_inp=inp_data_dir, dataset_name="builder_val100"))
+    test_samples = list(read_dataset(data_dir_inp=inp_data_dir, dataset_name="builder_test100"))
 
     train_samples = [{"html": dic["html"], "accept": dic["accept"]} for dic in train_samples]
     valid_samples = [{"html": dic["html"], "accept": dic["accept"]} for dic in valid_samples]

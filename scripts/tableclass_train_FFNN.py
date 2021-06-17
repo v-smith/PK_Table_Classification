@@ -1,17 +1,12 @@
 # imports
-from table_data_loaders import get_dataloaders
-from table_data_loaders import process_table_data
-from table_data_loaders import NeuralNet
+from data_loaders.table_data_loaders import get_dataloaders
+from data_loaders.table_data_loaders import NeuralNet
 import torch
 import torch.nn as nn
 from transformers import PreTrainedTokenizerFast
-from tqdm import tqdm
-import torch.optim as optim
-import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib
 from tableclass_engine_FFNN import train, validate
-from tableclass_engine_FFNN import calculate_metrics
 import numpy as np
 
 matplotlib.style.use('ggplot')
@@ -36,7 +31,7 @@ tokenizer.add_special_tokens({'pad_token': '[PAD]'})
 
 # ============ Get data loaders and datasets =============== #
 
-train_dataloader, train_dataset, valid_dataloader, valid_dataset, test_dataloader, test_dataset = get_dataloaders(inp_data_dir="../data/",
+train_dataloader, train_dataset, valid_dataloader, valid_dataset, test_dataloader, test_dataset = get_dataloaders(inp_data_dir="../data/train-test-val",
                                                                        inp_tokenizer="../tokenizers/tokenizerPKtablesSpecialTokens5000.json",
                                                                        max_len=500, batch_size=50, val_batch_size=100,
                                                                        n_workers=0)
@@ -50,7 +45,7 @@ device = 'cpu'
 
 input_size = 500  # size of the 1d tensor
 # hidden_size = 100
-num_classes = 6
+num_classes = 10
 hidden_size = 100
 epochs = 10
 batch_size = 50
@@ -62,7 +57,7 @@ padding_idx = tokenizer.pad_token_id
 torch.autograd.set_detect_anomaly(True)
 
 # ============ Get Model =============== #
-model = NeuralNet(input_size=input_size, num_classes=6, embeds_size=embeds_size, vocab_size=vocab_size,
+model = NeuralNet(input_size=input_size, num_classes=num_classes, embeds_size=embeds_size, vocab_size=vocab_size,
                   padding_idx=padding_idx, hidden_size=hidden_size)  # .to(device)
 
 # ============ Define Loss and Optimiser =============== #
@@ -115,24 +110,21 @@ for counter, data in enumerate(test_dataloader):
     # target_indices = [i for i in range(len(target[0])) if target[0][i] == 1]
     # get the predictions by passing the image through the model
 
-    n_samples = 0
+    correct = 0.
+    total = 0.
     #work out how to initiate loop
-    for batch in test_dataloader:
+    for counter, batch in enumerate(test_dataloader):
         input_ids, target = data['input_ids'].to(device), data['labels']
+        target_indices = [i for i in range(len(target[0])) if target[0][i] == 1]
         outputs = model(input_ids)
         outputs = torch.sigmoid(outputs)
         outputs = outputs.detach().cpu()
-        n_samples += labels.size(0)
-        n_correct = 0
-        #for each label in the number of labels ... do something
-        for label in labels:
-            n_correct += (predicted == labels).sum().item()
-            acc = 100.0 * n_correct / n_samples
-            print(label, acc)
+        predicted = np.round(outputs)
 
-    #result = calculate_metrics(np.array(outputs), np.array(target))
-    #print("micro f1: {:.3f} ", "macro f1: {:.3f} ", "samples f1: {:.3f}".format(
-        #result['micro/f1'], result['macro/f1'], result['samples/f1']))
+        total += target.size(0)/10  #try to understand this!!!
+        correct += (predicted == target).sum().item()
+        accuracy = correct / total
+        print("Accuracy: {}%".format(accuracy))
 
 
-    #calculate_metrics(outputs)
+
