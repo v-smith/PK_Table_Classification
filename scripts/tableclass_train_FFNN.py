@@ -6,7 +6,7 @@ import torch.nn as nn
 from transformers import PreTrainedTokenizerFast
 import matplotlib.pyplot as plt
 import matplotlib
-from tableclass_engine_FFNN import train, validate
+from tableclass_engine_FFNN import train, validate, label_wise_accuracy
 import numpy as np
 
 matplotlib.style.use('ggplot')
@@ -100,31 +100,34 @@ plt.show()
 # ============ Test Loop  =============== #
 
 # load the model checkpoint
-checkpoint = torch.load('../data/outputs/model.pth')
+#checkpoint = torch.load('../data/outputs/model.pth')
 # load model weights state_dict
-model.load_state_dict(checkpoint['model_state_dict'])
+#model.load_state_dict(checkpoint['model_state_dict'])
 model.eval()
 
-for counter, data in enumerate(test_dataloader):
-    # get all the index positions where value == 1
-    # target_indices = [i for i in range(len(target[0])) if target[0][i] == 1]
-    # get the predictions by passing the image through the model
-
-    correct = 0.
-    total = 0.
-    #work out how to initiate loop
+with torch.no_grad():
+    overall_correct = 0.
+    total_predictions = 0.
     for counter, batch in enumerate(test_dataloader):
-        input_ids, target = data['input_ids'].to(device), data['labels']
-        target_indices = [i for i in range(len(target[0])) if target[0][i] == 1]
+        input_ids = batch['input_ids'].to(device)
+        target = batch['labels']
         outputs = model(input_ids)
-        outputs = torch.sigmoid(outputs)
-        outputs = outputs.detach().cpu()
+        outputs = torch.sigmoid(outputs).cpu()
+        #outputs = outputs.detach().cpu()
         predicted = np.round(outputs)
 
-        total += target.size(0)/10  #try to understand this!!!
-        correct += (predicted == target).sum().item()
-        accuracy = correct / total
-        print("Accuracy: {}%".format(accuracy))
+        total_predictions += target.size(0) * target.size(1)
+        overall_correct += (predicted == target).sum().item()
+        overall_accuracy = overall_correct / total_predictions * 100
+
+        label1_targets= np.asarray(target)[:,1]
+        label1_preds= np.asarray(predicted)[:,1]
+        label1_correct= (label1_preds == label1_targets).sum()
+        label1_accuracy = label1_correct / target.size(0)
 
 
 
+print(f"Overall Micro-Accuracy: {overall_accuracy}")
+print(f"Label1 Accuracy: {label1_accuracy}")
+
+a=1

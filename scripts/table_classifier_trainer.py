@@ -71,32 +71,21 @@ for epoch in range(num_epochs):
 # ============ Define Val Loop =============== #
 # pass logits through sigmoid.... on validation set
 
-'''
+
 # ============ Define Test Loop =============== #
-outputs = []
+
 with torch.no_grad():
-    for i, batch in tqdm(enumerate(train_dataloader)):
-        input_ids = batch["input_ids"] #.to(device)
-        labels = batch["labels"] #.to(device)
-        output = model(input_ids)
-        outputs.append(output)
-
-        #_, predicted = torch.max(output.data, 1)
-        #n_samples += labels.size(0)
-        #n_correct += (predicted == labels).sum().item()
-
-
-outputs = torch.cat(outputs)
-outputs = torch.sigmoid(outputs)
-outputs = outputs.cpu().detach().numpy()
-
-roc_metrics = []
-
-for i in range(num_classes):
-    roc = metrics.roc_auc_score(test[i].values, outputs[:, i])
-    roc_metrics.append(roc)
-
-s = pd.Series(roc_metrics, index=range(n_labels))
-
-s.plot(kind="bar", figsize=(20, 5), title="roc auc score per class on test data", grid=True)
-'''
+    correct = 0.
+    total = 0.
+    #work out how to initiate loop
+    for counter, batch in enumerate(test_dataloader):
+        input_ids = batch['input_ids'].to(device)
+        target = batch['labels']
+        outputs = model(input_ids)
+        outputs = torch.sigmoid(outputs).cpu()
+        #outputs = outputs.detach().cpu()
+        predicted = np.round(outputs)
+        total += target.size(0)  #try to understand this!!!
+        correct += (predicted == target).sum().item()
+accuracy = correct / total * 100
+print("Overall Accuracy: {}%".format(accuracy))
