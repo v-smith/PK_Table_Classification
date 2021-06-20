@@ -76,24 +76,24 @@ def label_wise_metrics(labels, preds):
         class_acc = round(accuracy_score(y_true=col, y_pred=col2),4)
         acc_list.append(class_acc)
         counter+=1
-        metrics_dict= {"Label": counter, "acc": class_acc, "f1": class_f1}
+        metrics_dict= {"Label": counter,
+                       "acc": class_acc,
+                       "f1": class_f1}
         perclass_metrics.append(metrics_dict)
 
-
-
-    micro_acc =accuracy_score(labels, preds)
+    #total preds= np.shape
+    #overall_correct = (predicted == target).sum().item()
+    #micro_acc = overall_correct / total_predictions * 100
     macro_acc= sum(acc_list)/len(acc_list)
     micro_f1= round(f1_score(labels, preds, average="micro"), 4)
     macro_f1= round(f1_score(labels, preds, average="macro"),4)
 
-    global_metrics= {"micro_acc": micro_acc, "macro_acc": macro_acc, "micro_f1": micro_f1, "macro_f1": macro_f1}
+    global_metrics= {#"micro_acc": micro_acc,
+                     "macro_acc": macro_acc,
+                     "micro_f1": micro_f1,
+                     "macro_f1": macro_f1}
 
-    print(global_metrics)
-    print(perclass_metrics)
-
-
-
-label_wise_metrics(labels1, preds1)
+    return global_metrics, perclass_metrics
 
 '''
 label1_targets = np.asarray(target)[:, 1]

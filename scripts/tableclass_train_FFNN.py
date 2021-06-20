@@ -1,4 +1,5 @@
 # imports
+import sklearn.metrics
 from data_loaders.table_data_loaders import get_dataloaders
 from data_loaders.table_data_loaders import NeuralNet
 import torch
@@ -6,7 +7,7 @@ import torch.nn as nn
 from transformers import PreTrainedTokenizerFast
 import matplotlib.pyplot as plt
 import matplotlib
-from tableclass_engine_FFNN import train, validate, label_wise_accuracy
+from tableclass_engine_FFNN import train, validate, label_wise_metrics
 import numpy as np
 
 matplotlib.style.use('ggplot')
@@ -31,11 +32,11 @@ tokenizer.add_special_tokens({'pad_token': '[PAD]'})
 
 # ============ Get data loaders and datasets =============== #
 
-train_dataloader, train_dataset, valid_dataloader, valid_dataset, test_dataloader, test_dataset = get_dataloaders(inp_data_dir="../data/train-test-val",
-                                                                       inp_tokenizer="../tokenizers/tokenizerPKtablesSpecialTokens5000.json",
-                                                                       max_len=500, batch_size=50, val_batch_size=100,
-                                                                       n_workers=0)
-
+train_dataloader, train_dataset, valid_dataloader, valid_dataset, test_dataloader, test_dataset = get_dataloaders(
+    inp_data_dir="../data/train-test-val",
+    inp_tokenizer="../tokenizers/tokenizerPKtablesSpecialTokens5000.json",
+    max_len=500, batch_size=50, val_batch_size=100,
+    n_workers=0)
 
 # ============ Set Config =============== #
 
@@ -44,13 +45,12 @@ train_dataloader, train_dataset, valid_dataloader, valid_dataset, test_dataloade
 device = 'cpu'
 
 input_size = 500  # size of the 1d tensor
-# hidden_size = 100
 num_classes = 10
 hidden_size = 100
 epochs = 10
 batch_size = 50
 lr = 0.001
-embeds_size = 110
+embeds_size = 100
 vocab_size = tokenizer.vocab_size + len(tokenizer.all_special_tokens)
 padding_idx = tokenizer.pad_token_id
 
@@ -68,7 +68,7 @@ optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 train_loss = []
 valid_loss = []
 for epoch in range(epochs):
-    print(f"Epoch {epoch+1} of {epochs}")
+    print(f"Epoch {epoch + 1} of {epochs}")
     train_epoch_loss = train(
         model, train_dataloader, optimizer, criterion, train_dataset, device
     )
@@ -82,11 +82,11 @@ for epoch in range(epochs):
 
 # ============ Save Model  =============== #
 torch.save({
-            'epoch': epochs,
-            'model_state_dict': model.state_dict(),
-            'optimizer_state_dict': optimizer.state_dict(),
-            'loss': criterion,
-            }, '../data/outputs/model.pth')
+    'epoch': epochs,
+    'model_state_dict': model.state_dict(),
+    'optimizer_state_dict': optimizer.state_dict(),
+    'loss': criterion,
+}, '../data/outputs/model.pth')
 # plot and save the train and validation line graphs
 plt.figure(figsize=(10, 7))
 plt.plot(train_loss, color='orange', label='train loss')
@@ -100,9 +100,9 @@ plt.show()
 # ============ Test Loop  =============== #
 
 # load the model checkpoint
-#checkpoint = torch.load('../data/outputs/model.pth')
+# checkpoint = torch.load('../data/outputs/model.pth')
 # load model weights state_dict
-#model.load_state_dict(checkpoint['model_state_dict'])
+# model.load_state_dict(checkpoint['model_state_dict'])
 model.eval()
 
 with torch.no_grad():
@@ -113,21 +113,21 @@ with torch.no_grad():
         target = batch['labels']
         outputs = model(input_ids)
         outputs = torch.sigmoid(outputs).cpu()
-        #outputs = outputs.detach().cpu()
+        # outputs = outputs.detach().cpu()
         predicted = np.round(outputs)
 
         total_predictions += target.size(0) * target.size(1)
         overall_correct += (predicted == target).sum().item()
         overall_accuracy = overall_correct / total_predictions * 100
 
-        label1_targets= np.asarray(target)[:,1]
-        label1_preds= np.asarray(predicted)[:,1]
-        label1_correct= (label1_preds == label1_targets).sum()
-        label1_accuracy = label1_correct / target.size(0)
+        global_metrics, perclass_metrics = label_wise_metrics(target, predicted)
 
-
+        labels = np.asarray(target)
+        preds = np.asarray(predicted)
+        class_report = sklearn.metrics.classification_report(labels, preds)
 
 print(f"Overall Micro-Accuracy: {overall_accuracy}")
-print(f"Label1 Accuracy: {label1_accuracy}")
-
-a=1
+print(f"Classification Report: {class_report}")
+print(f"Global Metrics: {global_metrics}")
+print(f"Labelwise Metrics: {perclass_metrics}")
+a = 1

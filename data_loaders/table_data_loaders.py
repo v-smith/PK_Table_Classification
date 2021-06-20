@@ -8,9 +8,11 @@ from transformers import PreTrainedTokenizerFast
 from torch.utils.data import DataLoader, Dataset
 from tokenizers import Tokenizer
 import matplotlib.pyplot as plt
+import matplotlib
 import torch
 import os
 
+matplotlib.style.use('ggplot')
 
 # my_test_data= [{"html":"<html><table><th> blah blah <\html>", "accept":[1,2,3,4,5]}, {"html":"<html><table><th> blah blah <\html>", "accept":[1,2,3,4,5]}, {"html":"<html><table><th> blah blah <\html>", "accept":[1,2,3]}, {"html":"<html><table><th> blah blah <\html>", "accept":[1]}]
 
@@ -29,7 +31,10 @@ def preprocess_htmls(inp_samples: List[str]):
     for html in inp_samples:
         replace_n = html.replace("\n", "#n#")
         replace_style = re.sub(r"\<style>(.*?)\</style>", ' ', replace_n)
-        final_html = re.sub(r'''\<table xmlns:xlink=(.*?)rules="groups"\>''', ' ', replace_style)
+        #remove html
+        final_html = re.sub(r"\<(?:[^<>])*\>", ' ', replace_style)
+        #remove link info
+        #final_html = re.sub(r'''\<table xmlns:xlink=(.*?)rules="groups"\>''', ' ', replace_style)
         processed_htmls.append(final_html)
 
     return processed_htmls
