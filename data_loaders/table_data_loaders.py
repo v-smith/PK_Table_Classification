@@ -13,7 +13,6 @@ import torch
 import os
 
 matplotlib.style.use('ggplot')
-
 # my_test_data= [{"html":"<html><table><th> blah blah <\html>", "accept":[1,2,3,4,5]}, {"html":"<html><table><th> blah blah <\html>", "accept":[1,2,3,4,5]}, {"html":"<html><table><th> blah blah <\html>", "accept":[1,2,3]}, {"html":"<html><table><th> blah blah <\html>", "accept":[1]}]
 
 def convert_labels(inp_labels: List[List[str]]):
@@ -31,17 +30,24 @@ def preprocess_htmls(inp_samples: List[str]):
     for html in inp_samples:
         replace_n = html.replace("\n", "#n#")
         replace_style = re.sub(r"\<style>(.*?)\</style>", ' ', replace_n)
-        #remove html
-        final_html = re.sub(r"\<(?:[^<>])*\>", ' ', replace_style)
-        #remove link info
-        #final_html = re.sub(r'''\<table xmlns:xlink=(.*?)rules="groups"\>''', ' ', replace_style)
+        # remove html
+        # final_html = re.sub(r"\<(?:[^<>])*\>", ' ', replace_style)
+        # remove link info
+        final_html = re.sub(r'''\<table xmlns:xlink=(.*?)rules="groups"\>''', ' ', replace_style)
         processed_htmls.append(final_html)
 
     return processed_htmls
 
 
+def augment_tables(inp_samples: List[str]):
+    """Replaces PK terms with synonyms and obliterates some rows etc."""
+    # dictionary of terms
+    return inp_samples
+
+
 def print_token_stats(all_tokens: List[List[int]], dataset_name: str,
                       plot_histogram: bool = False):
+    """Plots total tokens per table"""
     n_tokens = []
     for tokens in all_tokens:
         nt = len(tokens)
