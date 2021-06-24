@@ -6,8 +6,8 @@ import torch
 import torch.nn as nn
 from transformers import PreTrainedTokenizerFast
 import matplotlib
-from tableclass_engine_FFNN import train, validate, label_wise_metrics, \
-    plot_loss_graph, plot_f1_graph, f1_nozeros
+from tableclass_engine_FFNN import label_wise_metrics, \
+    plot_loss_graph, plot_f1_graph, f1_nozeros, overfit_subset
 import numpy as np
 import json
 import os
@@ -17,16 +17,6 @@ writer = SummaryWriter("../data/runs/")
 
 # noinspection PyUnresolvedReferences
 matplotlib.style.use('ggplot')
-
-'''
-STEPS
-# 1. DataLoader
-# 2. Multilayer NN. ac func
-# 3. loss and optimizer
-# 4. training loop,
-# 5. model eval,
-# 6. GPU support
-'''
 
 # ============ Set Seed value =============== #
 torch.manual_seed(1)
@@ -70,44 +60,43 @@ optimizer = torch.optim.Adam(model.parameters(), lr=cf["lr"])
 # ============ Train and Val Loop  =============== #
 
 epochs = cf["epochs"]
-all_train_loss = []
-all_val_loss = []
-all_train_f1_weighted = []
-all_val_f1_weighted = []
-all_train_f1_macro = []
-all_val_f1_macro = []
+all_val_loss= []
+all_val_f1= []
+all_f1_macro = []
+all_f1_weighted = []
+all_f1_macro_positives = []
+all_f1_weighted_positives = []
+all_f1_notrel = []
+all_loss= []
 
+first_batch = next(iter(test_dataloader))
 for epoch in range(epochs):
     print(f"Epoch {epoch + 1} of {epochs}")
 
-    train_labels, train_predictions, train_loss = train(
-        model, train_dataloader, optimizer, criterion, train_dataset, device
-    )
-
-    val_labels, val_predictions, val_loss = validate(
-        model, valid_dataloader, criterion, valid_dataset, device
-    )
+    labels, predictions, loss = overfit_subset(
+        model, first_batch, optimizer, criterion, device)
 
     # calculate metrics
-    train_class_report = classification_report(train_labels, train_predictions, output_dict=True)
-    val_class_report = classification_report(val_labels, val_predictions, output_dict=True)
-    train_f1_positives_macro, train_f1_positives_weighted = f1_nozeros(train_class_report, remove_nonrel=True, only_notrel=False)
-    val_f1_positives_macro, val_f1_positives_weighted = f1_nozeros(val_class_report, remove_nonrel=True, only_notrel=False)
+    overfit_class_report = classification_report(labels, predictions, output_dict=True)
+    f1_macro, f1_weighted = f1_nozeros(overfit_class_report, remove_nonrel=False, only_notrel=False)
+    f1_macro_positives, f1_weighted_positives = f1_nozeros(overfit_class_report, remove_nonrel=True, only_notrel=False)
+    f1_macro_notrel, f1_weighted_notrel = f1_nozeros(overfit_class_report, remove_nonrel=False, only_notrel=True)
 
     # update metrics super list
-    all_train_loss.append(train_loss)
-    all_val_loss.append(val_loss)
-    all_train_f1_weighted.append(train_f1_positives_weighted)
-    all_val_f1_weighted.append(val_f1_positives_weighted)
-    all_train_f1_macro.append(train_f1_positives_macro)
-    all_val_f1_macro.append(val_f1_positives_macro)
+    all_f1_macro.append(f1_macro)
+    all_f1_weighted.append(f1_weighted)
+    all_f1_macro_positives.append(f1_macro_positives)
+    all_f1_weighted_positives.append(f1_weighted_positives)
+    all_f1_notrel.append(f1_macro_notrel)
+    all_loss.append(loss)
 
 # plot and save the train and validation line graphs
-
-plot_loss_graph(all_train_loss, all_val_loss, cf)
-plot_f1_graph(all_train_f1_macro, all_val_f1_macro, cf, "- Positive Classes")
-plot_f1_graph(all_train_f1_weighted, all_val_f1_weighted, cf, "- Weighted Positive Classes")
-
+plot_loss_graph(all_loss, all_val_loss, cf)
+plot_f1_graph(all_f1_macro, all_val_f1, cf, "All Macro")
+plot_f1_graph(all_f1_weighted, all_val_f1, cf, "All Weighted")
+plot_f1_graph(all_f1_macro_positives, all_val_f1, cf, "All Positive Macro")
+plot_f1_graph(all_f1_weighted_positives, all_val_f1, cf, "All Positive Weighted")
+plot_f1_graph(all_f1_notrel, all_val_f1, cf, "Not Relevant Only")
 
 # ========== Tensor Board ============#
 # TODO: Implement Tensorboard

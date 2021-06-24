@@ -6,11 +6,10 @@ from sklearn.metrics import f1_score, accuracy_score, classification_report
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
-import sys
 from torch.utils.tensorboard import SummaryWriter
+from typing import Dict, List, Iterable, Tuple
 
 writer = SummaryWriter("../data/runs/")
-
 matplotlib.style.use('ggplot')
 
 
@@ -18,17 +17,18 @@ matplotlib.style.use('ggplot')
 def train(model, dataloader, optimizer, criterion, train_data, device):
     print("====BEGIN TRAINING====")
     model.train()
-
     all_labels = []
     all_predictions = []
-    running_loss = []
-    counter= 0
+    running_loss = 0.0
+    counter = 0
     optimizer.zero_grad()
     for i, mini_batch in tqdm(enumerate(dataloader), total=int(len(train_data) / dataloader.batch_size)):
         counter += 1
-        input_ids, target = mini_batch['input_ids'].to(device), mini_batch['labels'].to(device)
-        # weight_rebal = torch.ones_like(target) / 95.0 + (1.0 - 1.0 / 95.0) * target #added, confirm this
 
+        input_ids = mini_batch['input_ids'].to(device)
+        target = mini_batch['labels'].to(device)
+
+        optimizer.zero_grad()  # empties from memory
         logits = model(input_ids)
         # apply sigmoid activation to get all the outputs between 0 and 1
         outputs = torch.sigmoid(logits)
@@ -45,38 +45,27 @@ def train(model, dataloader, optimizer, criterion, train_data, device):
 
         all_labels.extend(labels)
         all_predictions.extend(predicted)
-        running_loss.append(loss.item())
+        running_loss += loss.item()
 
-    all_labels = np.stack(all_labels, axis=0)
+    final_loss = running_loss / counter
+    all_labels = np.stack(all_labels, axis=0)  # check these!!
     all_predictions = np.stack(all_predictions, axis=0)
-    return all_labels, all_predictions, running_loss
-
-'''
-macro_f1 = f1_score(labels, predicted, average="macro")
-class_report= classification_report(labels, predicted)
-# loss = criterion(outputs, target, weight=weight_rebal) #added
-
-if macro_f1 != 0.0:
-    train_running_f1.append(macro_f1)
-else:
-    train_running_f1.append(None)
-train_running_loss.append(loss.item())
-'''
-
+    return all_labels, all_predictions, final_loss
 
 
 # validation function
 def validate(model, dataloader, criterion, val_data, device):
     print('Validating')
     model.eval()
-    running_loss= []
-    counter= 0
+    running_loss = 0.0
+    counter = 0
     all_labels = []
     all_predictions = []
     with torch.no_grad():
         for i, mini_batch in tqdm(enumerate(dataloader), total=int(len(val_data) / dataloader.batch_size)):
             counter += 1
-            input_ids, target = mini_batch['input_ids'].to(device), mini_batch['labels'].to(device)
+            input_ids = mini_batch['input_ids'].to(device)
+            target = mini_batch['labels'].to(device)
             # weight_rebal = torch.ones_like(target) / 95.0 + (1.0 - 1.0 / 95.0) * target
 
             logits = model(input_ids)
@@ -90,47 +79,68 @@ def validate(model, dataloader, criterion, val_data, device):
             labels = target.detach().numpy()
             all_predictions.extend(predicted)
             all_labels.extend(labels)
-            running_loss.append(loss.item())
+            running_loss += loss.item()
 
-
-        all_labels = np.stack(all_labels, axis=0)
+        final_loss = running_loss / counter
+        all_labels = np.stack(all_labels, axis=0)  # check these!!
         all_predictions = np.stack(all_predictions, axis=0)
-        return all_labels, all_predictions, running_loss
-
-def f1_nozeros(class_report_dict):
-    f1_list= []
-    for d in class_report_dict.values():
-        f1= d['f1-score']
-        if f1 != 0:
-            f1_list.append(f1)
-
-    f1_nozeros= round(sum(f1_list)/len(f1_list),4)
-    return f1_nozeros
-
-def multi_acc(y_pred, y_test):
-    y_pred_softmax = torch.log_softmax(y_pred, dim=1)
-    _, y_pred_tags = torch.max(y_pred_softmax, dim=1)
-
-    correct_pred = (y_pred_tags == y_test).float()
-    acc = correct_pred.sum() / len(correct_pred)
-
-    acc = torch.round(acc * 100)
-
-    return acc
+        return all_labels, all_predictions, final_loss
 
 
-labels1 = np.array([[1, 0, 1, 0, 1],
-                    [0, 1, 0, 1, 0],
-                    [0, 0, 0, 0, 0],
-                    [0, 1, 1, 0, 0]])
+# overfit to training data for debugging
+def overfit_subset(model, sub_sample, optimizer, criterion, device):
+    print("====OVERFITTING SANITY CHECK====")
+    model.train()
 
-preds1 = np.array([[1, 1, 1, 1, 1],
-                   [0, 0, 0, 1, 0],
-                   [0, 0, 1, 0, 0],
-                   [0, 1, 0, 0, 0]])
+    input_ids = sub_sample['input_ids'].to(device)
+    target = sub_sample['labels'].to(device)
+
+    optimizer.zero_grad()  # empties from memory
+    logits = model(input_ids)
+    # apply sigmoid activation to get all the outputs between 0 and 1
+    outputs = torch.sigmoid(logits)
+    loss = criterion(outputs, target)
+    # backpropagation
+    loss.backward()
+    # update optimizer parameters
+    optimizer.step()  # updating weights
+    optimizer.zero_grad()  # empties from memory
+
+    assert outputs.shape == target.shape
+    predicted = torch.round(outputs).detach().numpy()
+    labels = target.detach().numpy()
+
+    final_loss = loss.item()
+    return labels, predicted, final_loss
+
+
+def f1_nozeros(class_report_dict: Dict, remove_nonrel: bool, only_notrel: bool) -> Tuple[float, float]:
+    """Calculates F1-score without classes where support is zero"""
+    acceptable_keys = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]
+    non_zero_support_f1s = [dict(
+        class_name=key,
+        f1=v["f1-score"],
+        support=v["support"]) for key, v in class_report_dict.items() if
+        key in set(acceptable_keys) and v["support"] != 0]
+
+    if remove_nonrel:
+        non_zero_support_f1s = [x for x in non_zero_support_f1s if x["class_name"] != "4"]
+
+    if only_notrel:
+        non_zero_support_f1s = [x for x in non_zero_support_f1s if x["class_name"] == "4"]
+
+    macrof1 = 0.
+    weighted_f1 = 0.
+    if non_zero_support_f1s:
+        n_tp = np.sum([x["support"] for x in non_zero_support_f1s])
+        macrof1 = np.mean([x["f1"] for x in non_zero_support_f1s])
+        weighted_f1 = np.sum([x["f1"] * (x["support"] / n_tp) for x in non_zero_support_f1s])
+
+    return macrof1, weighted_f1
 
 
 def label_wise_metrics(labels, preds):
+    """Calculates Label-wise and global metrics for all classes"""
     labels = np.asarray(labels)
     preds = np.asarray(preds)
 
@@ -153,7 +163,6 @@ def label_wise_metrics(labels, preds):
     micro_acc = round((sum(all_correct_preds) / (preds.size)), 4)
     macro_acc = round(sum(acc_list) / len(acc_list), 4)
 
-
     global_metrics = {"micro_acc": micro_acc,
                       "macro_acc": macro_acc}
 
@@ -172,30 +181,13 @@ def plot_loss_graph(train_loss, valid_loss, cf):
     plt.show()
 
 
-def plot_f1_graph(train_f1, valid_f1, cf):
+def plot_f1_graph(train_f1, valid_f1, cf, variation: str):
     plt.figure(figsize=(10, 7))
     plt.plot(train_f1, color='orange', label='train f1')
     plt.plot(valid_f1, color='red', label='validataion f1')
-    plt.title("Macro F1 Scores on Train and Validation sets")
+    plt.title(f"Macro F1 Scores on Train and Validation sets {variation}")
     plt.xlabel('Epochs')
     plt.ylabel('F1')
     plt.legend()
-    plt.savefig(('../data/outputs/model_plots/f1-' + cf["run_name"] + '.png'))
+    plt.savefig(('../data/outputs/model_plots/f1-' + variation + cf["run_name"] + '.png'))
     plt.show()
-
-
-'''
-total_predictions += labels.size(0) * labels.size(1)
-overall_correct += (predicted == target).sum().item()
-label1_targets = np.asarray(target)[:, 1]
-label1_preds = np.asarray(predicted)[:, 1]
-label1_accuracy = label1_correct / target.size(0)
-
-    return {'micro/precision': precision_score(y_true=target, y_pred=pred, average='micro'),
-            'micro/recall': recall_score(y_true=target, y_pred=pred, average='micro'),
-            'macro/precision': precision_score(y_true=target, y_pred=pred, average='macro'),
-            'macro/recall': recall_score(y_true=target, y_pred=pred, average='macro'),
-            'samples/precision': precision_score(y_true=target, y_pred=pred, average='samples'),
-            'samples/recall': recall_score(y_true=target, y_pred=pred, average='samples'),
-            'samples/f1': f1_score(y_true=target, y_pred=pred, average='samples'), }
-'''

@@ -78,7 +78,7 @@ class PKDataset(Dataset):
     # support indexing such that dataset[i] can be used to get i-th sample
     def __getitem__(self, index):
         item = {key: torch.tensor(val[index]) for key, val in self.encodings.items()}
-        item["labels"] = torch.tensor(self.labels[index]).type(torch.DoubleTensor)  # size [n_samples, n_labels]
+        item["labels"] = torch.tensor(self.labels[index]).type(torch.float32)  #torch.DoubleTensor # size [n_samples, n_labels]
         return item
 
     def __len__(self):
@@ -189,14 +189,13 @@ def get_dataloaders(inp_data_dir: str, inp_tokenizer: str, max_len: int,
 
 # Fully connected neural network with one hidden layer
 class NeuralNet(nn.Module):
-    def __init__(self, input_size, num_classes, hidden_size, embeds_size, vocab_size, padding_idx):
+    def __init__(self, num_classes, hidden_size, embeds_size, vocab_size, padding_idx):
         super(NeuralNet, self).__init__()
         self.embedding = torch.nn.Embedding(vocab_size, embeds_size, padding_idx=padding_idx)
         self.l1 = nn.Linear(embeds_size, hidden_size)  # or number of classes if only one layer
         self.relu = nn.ReLU()
         self.l2 = nn.Linear(hidden_size, num_classes)
-        # do this to fit with tableclass_train_FFNN.py
-        self.double()
+        #self.double() #if feeding in a Torch.Double type
 
     def forward(self, x):
         embeddings = self.embedding(x)
@@ -204,6 +203,5 @@ class NeuralNet(nn.Module):
         out_l1 = self.l1(max_pooled)
         out_relu = self.relu(out_l1)
         out_l2 = self.l2(out_relu)
-        # out_final = self.l2(out_relu)
         # no activation and no softmax at the end
         return out_l2
