@@ -1,7 +1,7 @@
 # imports
 from sklearn.metrics import classification_report
 from data_loaders.table_data_loaders import get_dataloaders
-from data_loaders.table_data_loaders import NeuralNet
+from data_loaders.models import NeuralNet
 import torch
 import torch.nn as nn
 from transformers import PreTrainedTokenizerFast
