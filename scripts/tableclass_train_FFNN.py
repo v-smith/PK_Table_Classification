@@ -6,8 +6,8 @@ import torch
 import torch.nn as nn
 from transformers import PreTrainedTokenizerFast
 import matplotlib
-from tableclass_engine_FFNN import train, validate, label_wise_metrics, \
-    plot_loss_graph, plot_f1_graph, f1_nozeros
+from tableclass_engine import train, validate, label_wise_metrics, \
+    plot_loss_graph, plot_f1_graph, f1_nozeros, save_checkpoint
 import numpy as np
 import json
 import os
@@ -32,7 +32,7 @@ STEPS
 torch.manual_seed(1)
 
 # ============ Open Config File =============== #
-with open("../config/config_tableclass.json") as config:
+with open("../config/config_tableclass_FCNN.json") as config:
     cf = json.load(config)
 
 # ============ Load and Check Tokenizer =========== #
@@ -50,7 +50,7 @@ train_dataloader, train_dataset, valid_dataloader, valid_dataset, test_dataloade
     inp_data_dir="../data/train-test-val",
     inp_tokenizer="../tokenizers/tokenizerPKtablesSpecialTokens5000.json",
     max_len=cf["max_len"], batch_size=cf["batch_size"], val_batch_size=cf["val_batch_size"],
-    n_workers=cf["n_workers"])
+    n_workers=cf["n_workers"], remove_html=cf["remove_html"], baseline_only=cf["baseline_only"])
 
 # ============ Set Device =============== #
 # device config
@@ -76,6 +76,7 @@ all_train_f1_weighted = []
 all_val_f1_weighted = []
 all_train_f1_macro = []
 all_val_f1_macro = []
+best_weightedf1= 0
 
 for epoch in range(epochs):
     print(f"Epoch {epoch + 1} of {epochs}")
@@ -94,6 +95,22 @@ for epoch in range(epochs):
     train_f1_positives_macro, train_f1_positives_weighted = f1_nozeros(train_class_report, remove_nonrel=True, only_notrel=False)
     val_f1_positives_macro, val_f1_positives_weighted = f1_nozeros(val_class_report, remove_nonrel=True, only_notrel=False)
 
+    # save loss at each training step
+    writer.add_scalar("Loss/train", train_loss, epoch+1)
+    writer.add_scalar("Loss/val", val_loss, epoch+1)
+    writer.add_scalar("F1_weighted/train", train_f1_positives_weighted, epoch+1)
+    writer.add_scalar("F1_weighted/val", val_f1_positives_weighted, epoch+1)
+
+    #save checkpoint
+    is_best = val_f1_positives_weighted > best_weightedf1
+    best_weightedf1 = max(val_f1_positives_weighted, best_weightedf1)
+    save_checkpoint({
+        'epoch': epoch + 1,
+        'state_dict': model.state_dict(),
+        'best_f1': best_weightedf1,
+        'optimizer': optimizer.state_dict(),
+    }, is_best, cf["run_name"])
+
     # update metrics super list
     all_train_loss.append(train_loss)
     all_val_loss.append(val_loss)
@@ -102,71 +119,18 @@ for epoch in range(epochs):
     all_train_f1_macro.append(train_f1_positives_macro)
     all_val_f1_macro.append(val_f1_positives_macro)
 
-# plot and save the train and validation line graphs
+#make sure that all pending events have been written to disk
+writer.flush()
+#close writer
+#writer.close()
 
+# ========== Plot Results and Save/ Tensor Board ============#
+
+class_report = classification_report(val_labels, val_predictions)
+print("==== FINAL VALIDATION CLASS REPORT ====")
+print(class_report)
 plot_loss_graph(all_train_loss, all_val_loss, cf)
 plot_f1_graph(all_train_f1_macro, all_val_f1_macro, cf, "- Positive Classes")
 plot_f1_graph(all_train_f1_weighted, all_val_f1_weighted, cf, "- Weighted Positive Classes")
 
-
-# ========== Tensor Board ============#
-# TODO: Implement Tensorboard
-# tensorboard
-# writer.add_scalar('training loss', train_running_loss / counter, n_total_steps + i)
-
-# img_grid = torchvision.utils.make_grid()
-# writer.add_image("tableclass", img_grid)
-# writer.close()
-
-# ============ Save the Best Model  =============== #
-
-# TODO: save best model- look at: https://github.com/lavis-nlp/spert/blob/master/spert/trainer.py
-torch.save({
-    'epoch': epochs,
-    'model_state_dict': model.state_dict(),
-    'optimizer_state_dict': optimizer.state_dict(),
-    'loss': criterion,
-}, ('../data/outputs/model_saves/' + cf["run_name"] + ".pth"))
-
-# ============ Test Loop  =============== #
-
-# load the model checkpoint
-model_checkpoint = torch.load('../data/outputs/model_saves/trial-FFNN-classification.pth')
-
-# load model weights state_dict and optimizer state dict
-model.load_state_dict(model_checkpoint['model_state_dict'])
-optimizer.load_state_dict(model_checkpoint["optimizer_state_dict"])
-
-# model in eval mode
-model.eval()
-with torch.no_grad():
-    print("==== Begin Evaluation ====")
-    all_preds = []
-    all_labels = []
-    for i, batch in enumerate(test_dataloader):
-        input_ids, target = batch['input_ids'].to(device), batch['labels']
-
-        outputs = model(input_ids)
-        outputs = torch.sigmoid(outputs).detach().cpu()
-        predicted = torch.round(outputs)
-
-        labels = np.asarray(target)
-        all_labels.extend(labels)
-        preds = np.asarray(predicted)
-        all_preds.extend(preds)
-
-# metric calculations
-all_labels = np.stack(all_labels, axis=0)
-all_predictions = np.stack(all_preds, axis=0)
-global_metrics = label_wise_metrics(all_labels, all_predictions)
-class_report = classification_report(labels, preds)
-class_report_dict = classification_report(labels, preds, output_dict=True)
-f1_nozeros = f1_nozeros(class_report_dict)
-f1 = f1_all(class_report_dict)
-
-# prints
-print(f"Global Metrics: {global_metrics}")
-print(f"All F1: {f1} | "
-      f"No Zeros F1: {f1_nozeros}")
-print(f"Classification Report: {class_report}")
-a = 1
+a=1

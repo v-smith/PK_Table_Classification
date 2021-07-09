@@ -10,6 +10,8 @@
   "val_batch_size":64,
   "n_workers":0,
   "lr":0.01,
-  "embeds_size":100
+  "embeds_size":100,
+  "remove_html": "True",
+  "baseline_only": "False"
 }
 

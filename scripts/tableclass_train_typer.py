@@ -6,7 +6,7 @@ from pytorch_lightning.core.decorators import auto_move_data
 from transformers import PreTrainedTokenizerFast
 from data_loaders.table_data_loaders import get_dataloaders
 from data_loaders.table_data_loaders import NeuralNet
-from tableclass_engine_FFNN import get_tensorboard_logger
+from tableclass_engine import get_tensorboard_logger
 import typer
 from pathlib import Path
 from datetime import datetime

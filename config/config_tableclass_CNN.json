@@ -1,0 +1,15 @@
+{
+  "run_name": "trial-FFNN-classification",
+  "tokenizer_file": "../tokenizers/tokenizerPKtablesSpecialTokens5000.json",
+  "max_len": 500,
+  "input_size": 500,
+  "num_classes":10,
+  "hidden_size":100,
+  "epochs":2,
+  "batch_size":64,
+  "val_batch_size":64,
+  "n_workers":0,
+  "lr":0.01,
+  "embeds_size":100
+}
+

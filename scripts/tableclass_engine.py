@@ -1,4 +1,6 @@
 # imports
+import shutil
+
 import torch
 import torchvision
 from tqdm import tqdm
@@ -82,7 +84,7 @@ def validate(model, dataloader, criterion, val_data, device):
             running_loss += loss.item()
 
         final_loss = running_loss / counter
-        all_labels = np.stack(all_labels, axis=0)  # check these!!
+        all_labels = np.stack(all_labels, axis=0)
         all_predictions = np.stack(all_predictions, axis=0)
         return all_labels, all_predictions, final_loss
 
@@ -112,6 +114,14 @@ def overfit_subset(model, sub_sample, optimizer, criterion, device):
 
     final_loss = loss.item()
     return labels, predicted, final_loss
+
+
+def save_checkpoint(state, is_best, run_name, file_path="../data/outputs/model_saves/"):
+    filename = (file_path + run_name + "checkpoint.pth.tar")
+    torch.save(state, filename)
+    if is_best:
+        is_best_filename = (file_path + run_name + "model_best.pth.tar")
+        shutil.copyfile(filename, is_best_filename)
 
 
 def f1_nozeros(class_report_dict: Dict, remove_nonrel: bool, only_notrel: bool) -> Tuple[float, float]:
@@ -191,3 +201,14 @@ def plot_f1_graph(train_f1, valid_f1, cf, variation: str):
     plt.legend()
     plt.savefig(('../data/outputs/model_plots/f1-' + variation + cf["run_name"] + '.png'))
     plt.show()
+
+
+'''
+# ============ Save Model  =============== #
+torch.save({
+    'epoch': epoch,
+    'model_state_dict': model.state_dict(),
+    'optimizer_state_dict': optimizer.state_dict(),
+    'loss': criterion,
+}, ('../data/outputs/model_saves/' + cf["run_name"] + ".pth"))
+'''

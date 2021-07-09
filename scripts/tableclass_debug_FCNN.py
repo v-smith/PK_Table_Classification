@@ -6,14 +6,13 @@ import torch
 import torch.nn as nn
 from transformers import PreTrainedTokenizerFast
 import matplotlib
-from tableclass_engine_FFNN import label_wise_metrics, \
+from tableclass_engine import label_wise_metrics, \
     plot_loss_graph, plot_f1_graph, f1_nozeros, overfit_subset
 import numpy as np
 import json
 import os
 from torch.utils.tensorboard import SummaryWriter
 
-writer = SummaryWriter("../data/runs/")
 
 # noinspection PyUnresolvedReferences
 matplotlib.style.use('ggplot')
@@ -22,7 +21,7 @@ matplotlib.style.use('ggplot')
 torch.manual_seed(1)
 
 # ============ Open Config File =============== #
-with open("../config/config_tableclass.json") as config:
+with open("../config/config_tableclass_FCNN.json") as config:
     cf = json.load(config)
 
 # ============ Load and Check Tokenizer =========== #

@@ -10,7 +10,7 @@ from sklearn.preprocessing import MultiLabelBinarizer
 matplotlib.style.use('ggplot')
 
 
-with jsonlines.open("../data/train-test-val/final-out-test1000.jsonl") as reader:
+with jsonlines.open("../data/train-test-val/train.jsonl") as reader:
     json_list = []
     for obj in reader:
         json_list.append(obj)
