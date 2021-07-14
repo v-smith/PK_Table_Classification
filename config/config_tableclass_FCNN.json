@@ -3,7 +3,7 @@
   "tokenizer_file": "../tokenizers/tokenizerPKtablesSpecialTokens5000.json",
   "max_len": 500,
   "input_size": 500,
-  "num_classes":10,
+  "num_classes":9,
   "hidden_size":100,
   "epochs":100,
   "batch_size":64,

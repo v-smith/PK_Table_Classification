@@ -64,8 +64,14 @@ model = NeuralNet(num_classes=cf["num_classes"], embeds_size=cf["embeds_size"],
                   vocab_size=vocab_size, padding_idx=padding_idx, hidden_size=cf["hidden_size"]).to(device)
 
 # ============ Define Loss and Optimiser =============== #
-criterion = nn.BCELoss()  # functional.binary_cross_entropy
+train_labels = np.stack([x["labels"].numpy() for x in train_dataset], axis=0)
+neg_samples = train_labels.shape[0]- np.sum(train_labels, axis=0)
+weights = neg_samples/(np.sum(train_labels, axis=0))
+
+criterion = nn.BCELoss(weights=weights, reduction=None)  # functional.binary_cross_entropy
 optimizer = torch.optim.Adam(model.parameters(), lr=cf["lr"])
+target = torch.empty(cf["batch_size"], dtype=torch.long).random_(cf["num_classes"])
+sample_weight = torch.empty(cf["batch_size"]).uniform_(0, 1)
 
 # ============ Train and Val Loop  =============== #
 

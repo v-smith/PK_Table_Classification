@@ -19,7 +19,9 @@ matplotlib.style.use('ggplot')
 def convert_labels(inp_labels: List[List[str]]):
     """Transforms labels to vector of binary numbers"""
     mlb = MultiLabelBinarizer()
-    all_transformed_labels = mlb.fit_transform(inp_labels)
+    #remove not relevant class
+    new_labels = [list(filter(lambda a: a != 5, x)) for x in inp_labels]
+    all_transformed_labels = mlb.fit_transform(new_labels)
     all_transformed_labels = list(all_transformed_labels)
     # print(all_transformed_labels[1:4])
     return all_transformed_labels
@@ -34,7 +36,7 @@ def preprocess_htmls(inp_samples: List[str], remove_html=bool):
         if remove_html:
             final_html = re.sub(r"\<(?:[^<>])*\>", ' ', replace_style)
         else:
-            final_html = re.sub(r'''\<table xmlns:(.*?)rules="groups"\>''', ' ', replace_style)
+            final_html = re.sub(r'''\<table xmlns:(.*?)rules="groups"\>''', '<table>', replace_style)
         processed_htmls.append(final_html)
 
     return processed_htmls
@@ -86,14 +88,18 @@ def extract_all_ids_withoutpad(html_encodings: List[List[int]]):
 
 class PKDataset(Dataset):
 
-    def __init__(self, encodings, labels):
+    def __init__(self, encodings, labels, task_hash, input_hash):
         self.encodings = encodings
         self.labels = labels
+        self.task_hash= task_hash
+        self.input_hash= input_hash
 
     # support indexing such that dataset[i] can be used to get i-th sample
     def __getitem__(self, index):
         item = {key: torch.tensor(val[index]) for key, val in self.encodings.items()}
         item["labels"] = torch.tensor(self.labels[index]).type(torch.float32)  #torch.DoubleTensor # size [n_samples, n_labels]
+        item["_task_hash"] = self.task_hash[index]
+        item["_input_hash"] = self.input_hash[index]
         return item
 
     def __len__(self):
@@ -116,6 +122,9 @@ def process_table_data(inp_samples: List[Dict], inp_tokenizer: str, max_len: int
     labels = [sample["accept"] for sample in inp_samples]
     labels = convert_labels(inp_labels=labels)
 
+    task_hash = [sample["_task_hash"] for sample in inp_samples]
+    input_hash= [sample["_input_hash"] for sample in inp_samples]
+
     tokenizer = PreTrainedTokenizerFast(tokenizer_file=inp_tokenizer)
     tokenizer.add_special_tokens({'pad_token': '[PAD]'})
     table_encodings = tokenizer(prepro_htmls, padding=True, truncation=True, max_length=max_len)
@@ -131,7 +140,7 @@ def process_table_data(inp_samples: List[Dict], inp_tokenizer: str, max_len: int
     print(table_encodings.input_ids[1])
     print(labels[1])
 
-    torch_dataset = PKDataset(encodings=table_encodings, labels=labels)
+    torch_dataset = PKDataset(encodings=table_encodings, labels=labels, task_hash=task_hash, input_hash=input_hash)
     return torch_dataset
 
 
@@ -182,12 +191,12 @@ def get_dataloaders(inp_data_dir: str, inp_tokenizer: str, max_len: int,
     @return: pytorch data loaders
     """
     train_samples = list(read_dataset(data_dir_inp=inp_data_dir, dataset_name="train"))
-    valid_samples = list(read_dataset(data_dir_inp=inp_data_dir, dataset_name="val"))
-    test_samples = list(read_dataset(data_dir_inp=inp_data_dir, dataset_name="test"))
+    valid_samples = list(read_dataset(data_dir_inp=inp_data_dir, dataset_name="test"))
+    test_samples = list(read_dataset(data_dir_inp=inp_data_dir, dataset_name="val"))
 
-    train_samples = [{"html": dic["html"], "accept": dic["accept"]} for dic in train_samples]
-    valid_samples = [{"html": dic["html"], "accept": dic["accept"]} for dic in valid_samples]
-    test_samples = [{"html": dic["html"], "accept": dic["accept"]} for dic in test_samples]
+    train_samples = [{"html": dic["html"], "accept": dic["accept"], "_task_hash": dic["_task_hash"], "_input_hash": dic["_input_hash"]} for dic in train_samples]
+    valid_samples = [{"html": dic["html"], "accept": dic["accept"], "_task_hash": dic["_task_hash"],  "_input_hash": dic["_input_hash"]} for dic in valid_samples]
+    test_samples = [{"html": dic["html"], "accept": dic["accept"], "_task_hash": dic["_task_hash"],  "_input_hash": dic["_input_hash"]} for dic in test_samples]
 
     train_dataloader, train_dataset = make_dataloader(inp_samples=train_samples, batch_size=batch_size,
                                                       inp_tokenizer=inp_tokenizer,

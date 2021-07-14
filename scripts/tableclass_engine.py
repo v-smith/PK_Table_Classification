@@ -124,7 +124,7 @@ def save_checkpoint(state, is_best, run_name, file_path="../data/outputs/model_s
         shutil.copyfile(filename, is_best_filename)
 
 
-def f1_nozeros(class_report_dict: Dict, remove_nonrel: bool, only_notrel: bool) -> Tuple[float, float]:
+def f1_nozeros(class_report_dict: Dict) -> Tuple[float, float]:
     """Calculates F1-score without classes where support is zero"""
     acceptable_keys = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]
     non_zero_support_f1s = [dict(
@@ -133,11 +133,11 @@ def f1_nozeros(class_report_dict: Dict, remove_nonrel: bool, only_notrel: bool) 
         support=v["support"]) for key, v in class_report_dict.items() if
         key in set(acceptable_keys) and v["support"] != 0]
 
-    if remove_nonrel:
-        non_zero_support_f1s = [x for x in non_zero_support_f1s if x["class_name"] != "4"]
+    #if remove_nonrel:
+        #non_zero_support_f1s = [x for x in non_zero_support_f1s if x["class_name"] != "4"]
 
-    if only_notrel:
-        non_zero_support_f1s = [x for x in non_zero_support_f1s if x["class_name"] == "4"]
+    #if only_notrel:
+        #non_zero_support_f1s = [x for x in non_zero_support_f1s if x["class_name"] == "4"]
 
     macrof1 = 0.
     weighted_f1 = 0.
