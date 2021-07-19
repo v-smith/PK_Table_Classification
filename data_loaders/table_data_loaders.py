@@ -16,11 +16,21 @@ from data_loaders.extract_baseline import findall_rownames, findall_colnames, jo
 matplotlib.style.use('ggplot')
 # my_test_data= [{"html":"<html><table><th> blah blah <\html>", "accept":[1,2,3,4,5]}, {"html":"<html><table><th> blah blah <\html>", "accept":[1,2,3,4,5]}, {"html":"<html><table><th> blah blah <\html>", "accept":[1,2,3]}, {"html":"<html><table><th> blah blah <\html>", "accept":[1]}]
 
-def convert_labels(inp_labels: List[List[str]]):
+def convert_labels_5s(inp_labels: List[List[str]]):
     """Transforms labels to vector of binary numbers"""
     mlb = MultiLabelBinarizer()
     #remove not relevant class
     new_labels = [list(filter(lambda a: a != 5, x)) for x in inp_labels]
+    all_transformed_labels = mlb.fit_transform(new_labels)
+    all_transformed_labels = list(all_transformed_labels)
+    # print(all_transformed_labels[1:4])
+    return all_transformed_labels
+
+def convert_labels(inp_labels: List[List[str]]):
+    """Transforms labels to vector of binary numbers"""
+    mlb = MultiLabelBinarizer()
+    #remove not relevant class
+    new_labels = inp_labels
     all_transformed_labels = mlb.fit_transform(new_labels)
     all_transformed_labels = list(all_transformed_labels)
     # print(all_transformed_labels[1:4])
@@ -107,7 +117,7 @@ class PKDataset(Dataset):
 
 
 def process_table_data(inp_samples: List[Dict], inp_tokenizer: str, max_len: int,
-                       dataset_name: str, remove_html: bool, baseline_only: bool) -> PKDataset:
+                       dataset_name: str, remove_html: bool, baseline_only: bool, remove_5s:bool) -> PKDataset:
     """
     Generates a pytorch dataset containing encoded tokens and labels
     """
@@ -120,7 +130,10 @@ def process_table_data(inp_samples: List[Dict], inp_tokenizer: str, max_len: int
         prepro_htmls = preprocess_htmls(inp_samples=htmls, remove_html=remove_html)
 
     labels = [sample["accept"] for sample in inp_samples]
-    labels = convert_labels(inp_labels=labels)
+    if remove_5s:
+        labels = convert_labels_5s(inp_labels=labels)
+    else:
+        labels = convert_labels(inp_labels=labels)
 
     task_hash = [sample["_task_hash"] for sample in inp_samples]
     input_hash= [sample["_input_hash"] for sample in inp_samples]
@@ -145,9 +158,9 @@ def process_table_data(inp_samples: List[Dict], inp_tokenizer: str, max_len: int
 
 
 def make_dataloader(inp_samples: List[Dict], batch_size: int, inp_tokenizer: str, max_len: int,
-                    shuffle: bool, n_workers: int, dataset_name: str, remove_html:bool, baseline_only:bool) -> [DataLoader, PKDataset]:
+                    shuffle: bool, n_workers: int, dataset_name: str, remove_html:bool, baseline_only:bool, remove_5s:bool) -> [DataLoader, PKDataset]:
     torch_dataset = process_table_data(inp_samples=inp_samples, inp_tokenizer=inp_tokenizer, max_len=max_len,
-                                       dataset_name=dataset_name, remove_html=remove_html, baseline_only=baseline_only)
+                                       dataset_name=dataset_name, remove_html=remove_html, baseline_only=baseline_only, remove_5s=remove_5s)
     if shuffle:
         loader = DataLoader(torch_dataset, batch_size=batch_size, num_workers=n_workers, shuffle=True)
 
@@ -190,9 +203,9 @@ def get_dataloaders(inp_data_dir: str, inp_tokenizer: str, max_len: int,
     @param n_workers: number of workers for the dataloader
     @return: pytorch data loaders
     """
-    train_samples = list(read_dataset(data_dir_inp=inp_data_dir, dataset_name="train"))
-    valid_samples = list(read_dataset(data_dir_inp=inp_data_dir, dataset_name="test"))
-    test_samples = list(read_dataset(data_dir_inp=inp_data_dir, dataset_name="val"))
+    train_samples = list(read_dataset(data_dir_inp=inp_data_dir, dataset_name="train-corrected"))
+    valid_samples = list(read_dataset(data_dir_inp=inp_data_dir, dataset_name="val-corrected"))
+    test_samples = list(read_dataset(data_dir_inp=inp_data_dir, dataset_name="test-corrected"))
 
     train_samples = [{"html": dic["html"], "accept": dic["accept"], "_task_hash": dic["_task_hash"], "_input_hash": dic["_input_hash"]} for dic in train_samples]
     valid_samples = [{"html": dic["html"], "accept": dic["accept"], "_task_hash": dic["_task_hash"],  "_input_hash": dic["_input_hash"]} for dic in valid_samples]
@@ -201,15 +214,18 @@ def get_dataloaders(inp_data_dir: str, inp_tokenizer: str, max_len: int,
     train_dataloader, train_dataset = make_dataloader(inp_samples=train_samples, batch_size=batch_size,
                                                       inp_tokenizer=inp_tokenizer,
                                                       max_len=max_len, shuffle=True, n_workers=n_workers,
-                                                      dataset_name='training', remove_html=remove_html, baseline_only=baseline_only)
+                                                      dataset_name='training', remove_html=remove_html, baseline_only=baseline_only,
+                                                      remove_5s=False)
     valid_dataloader, valid_dataset = make_dataloader(inp_samples=valid_samples, batch_size=val_batch_size,
                                                       inp_tokenizer=inp_tokenizer,
                                                       max_len=max_len, shuffle=False, n_workers=n_workers,
-                                                      dataset_name='dev', remove_html=remove_html, baseline_only=baseline_only)
+                                                      dataset_name='dev', remove_html=remove_html, baseline_only=baseline_only,
+                                                      remove_5s=False)
     test_dataloader, test_dataset = make_dataloader(inp_samples=test_samples, batch_size=val_batch_size,
                                                     inp_tokenizer=inp_tokenizer,
                                                     max_len=max_len, shuffle=False, n_workers=n_workers,
-                                                    dataset_name='test', remove_html=remove_html, baseline_only=baseline_only)
+                                                    dataset_name='test', remove_html=remove_html, baseline_only=baseline_only,
+                                                    remove_5s=True)
 
     return train_dataloader, train_dataset, valid_dataloader, valid_dataset, test_dataloader, test_dataset
 

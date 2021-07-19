@@ -81,7 +81,7 @@ all_predictions = np.stack(all_preds, axis=0)
 
 test_class_dict = classification_report(all_labels,all_preds, output_dict=True)
 test_class_report = classification_report(all_labels,all_preds)
-test_f1_positives_macro, test_f1_positives_weighted = f1_nozeros(test_class_dict, remove_nonrel=True, only_notrel=False)
+test_f1_positives_macro, test_f1_positives_weighted = f1_nozeros(test_class_dict)
 
 # prints
 print(f"F1 Weighted (Positive Classes Only): {test_f1_positives_weighted} | "
@@ -107,7 +107,7 @@ for table, label, pred, t_hash, i_hash in zip(htmls, indices_labels, indices_pre
     compare_labels.append({"html": table, "accept": label, "_task_hash": t_hash, "_input_hash": i_hash, "_session_id": "labels", "answer": "accept", "_view_id":"blocks","options":[{"id":0,"text":"NC Params"},{"id":1,"text":"C Params"},{"id":2,"text":"Param-cov Rs"},{"id":3,"text":"Params Other"},{"id":4,"text":"Doses"},{"id":5,"text":"Number of Subjects"},{"id":6,"text":"Samples Timings"},{"id":7,"text":"Demographics"},{"id":8,"text":"Covariates Other"}], "config":{"choice_style":"multiple"}})
     compare_preds.append({"html": table, "accept": pred, "_task_hash": t_hash, "_input_hash": i_hash, "_session_id": "preds", "answer": "accept", "_view_id":"blocks","options":[{"id":0,"text":"NC Params"},{"id":1,"text":"C Params"},{"id":2,"text":"Param-cov Rs"},{"id":3,"text":"Params Other"},{"id":4,"text":"Doses"},{"id":5,"text":"Number of Subjects"},{"id":6,"text":"Samples Timings"},{"id":7,"text":"Demographics"},{"id":8,"text":"Covariates Other"}], "config":{"choice_style":"multiple"}})
 
-original_annotations = list(read_jsonl("../data/train-test-val/test.jsonl"))
+original_annotations = list(read_jsonl("../data/train-test-val/train.jsonl"))
 
 for d in compare_preds:
     for d2 in original_annotations:
@@ -118,6 +118,12 @@ for a in compare_labels:
     for a2 in original_annotations:
         if a["_task_hash"] == a2["_task_hash"]:
             a["html"]= a2["html"]
+
+with jsonlines.open("../data/" + "test-labels.jsonl", mode='w') as writer:
+    writer.write_all(compare_labels)
+
+with jsonlines.open("../data/" + "compare-preds.jsonl", mode='w') as writer:
+    writer.write_all(compare_preds)
 
 db = connect()
 if db.get_dataset("labels"):

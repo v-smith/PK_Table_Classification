@@ -12,6 +12,7 @@ import numpy as np
 import json
 import os
 from torch.utils.tensorboard import SummaryWriter
+from data_loaders.models import CNN
 
 writer = SummaryWriter("../data/runs/")
 
@@ -32,7 +33,7 @@ STEPS
 torch.manual_seed(1)
 
 # ============ Open Config File =============== #
-with open("../config/config_tableclass_FCNN.json") as config:
+with open("../config/config_tableclass_CNN.json") as config:
     cf = json.load(config)
 
 # ============ Load and Check Tokenizer =========== #
@@ -60,21 +61,24 @@ device = 'cpu'
 torch.autograd.set_detect_anomaly(True)
 
 # ============ Get Model =============== #
-model = NeuralNet(num_classes=cf["num_classes"], embeds_size=cf["embeds_size"],
-                  vocab_size=vocab_size, padding_idx=padding_idx, hidden_size=cf["hidden_size"]).to(device)
+#model = NeuralNet(num_classes=cf["num_classes"], embeds_size=cf["embeds_size"],
+                  #vocab_size=vocab_size, padding_idx=padding_idx, hidden_size=cf["hidden_size"]).to(device)
+model = CNN(seq_len=cf["seq_len"], out_channels=cf["out_channels"], input_channels=cf["input_channels"],
+            num_classes=cf["num_classes"], embeds_size=cf["embeds_size"], kernel_heights=cf["kernel_heights"],
+            vocab_size=vocab_size, padding_idx=padding_idx, stride=cf["stride"]).to(device)
 
 # ============ Define Loss and Optimiser =============== #
 train_labels = np.stack([x["labels"].numpy() for x in train_dataset], axis=0)
-neg_samples = train_labels.shape[0]- np.sum(train_labels, axis=0)
+neg_samples = train_labels.shape[0] - np.sum(train_labels, axis=0)
 weights = neg_samples/(np.sum(train_labels, axis=0))
+batch_weights = np.tile(weights, (cf["batch_size"], 1))
+weights = torch.from_numpy(batch_weights)
 
-criterion = nn.BCELoss(weights=weights, reduction=None)  # functional.binary_cross_entropy
+criterion = nn.BCELoss()  # reduction? weight=weights
+#criterion = nn.BCEWithLogitsLoss(pos_weight=weights, reduce=None)
 optimizer = torch.optim.Adam(model.parameters(), lr=cf["lr"])
-target = torch.empty(cf["batch_size"], dtype=torch.long).random_(cf["num_classes"])
-sample_weight = torch.empty(cf["batch_size"]).uniform_(0, 1)
 
 # ============ Train and Val Loop  =============== #
-
 epochs = cf["epochs"]
 all_train_loss = []
 all_val_loss = []
@@ -98,8 +102,8 @@ for epoch in range(epochs):
     # calculate metrics
     train_class_report = classification_report(train_labels, train_predictions, output_dict=True)
     val_class_report = classification_report(val_labels, val_predictions, output_dict=True)
-    train_f1_positives_macro, train_f1_positives_weighted = f1_nozeros(train_class_report, remove_nonrel=True, only_notrel=False)
-    val_f1_positives_macro, val_f1_positives_weighted = f1_nozeros(val_class_report, remove_nonrel=True, only_notrel=False)
+    train_f1_positives_macro, train_f1_positives_weighted = f1_nozeros(train_class_report)
+    val_f1_positives_macro, val_f1_positives_weighted = f1_nozeros(val_class_report)
 
     # save loss at each training step
     writer.add_scalar("Loss/train", train_loss, epoch+1)

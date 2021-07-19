@@ -12,7 +12,7 @@ class NeuralNet(nn.Module):
         self.l1 = nn.Linear(embeds_size, hidden_size)  # or number of classes if only one layer
         self.relu = nn.ReLU()
         self.l2 = nn.Linear(hidden_size, num_classes)
-        self.dropout = nn.Dropout(0.25)  # define proportion of neurons to drop out
+        self.dropout = nn.Dropout(0.4)  # define proportion of neurons to drop out
         # self.double() #if feeding in a Torch.Double type
 
     def forward(self, x):
@@ -59,11 +59,11 @@ class CNN(nn.Module):
         self.fc = nn.Linear(len(kernel_heights) * out_channels, num_classes)
 
     def conv_block(self, tmp_input, conv_layer):
-        squeezed = tmp_input.squeeze()
-        conv_out = conv_layer(squeezed)  # conv_out.size() = (batch_size, out_channels, dim, 1)
+        conv_out = conv_layer(tmp_input)  # conv_out.size() = (batch_size, out_channels, dim, 1)
         activation = F.relu(conv_out.squeeze(3))  # activation.size() = (batch_size, out_channels, dim1)
         #try these
-        #max_out = F.max_pool1d(activation, activation.size()[2]).squeeze(2)  # maxpool_out.size() = (batch_size, out_channels)
+        max_out = F.max_pool1d(activation, activation.size()[2]).squeeze(2)
+        # maxpool_out.size() = (batch_size, out_channels)
         #max pool across one dimension (all embeddings can be selected)
         #average pool
         return max_out

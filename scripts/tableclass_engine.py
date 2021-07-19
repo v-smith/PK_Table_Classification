@@ -36,6 +36,7 @@ def train(model, dataloader, optimizer, criterion, train_data, device):
         outputs = torch.sigmoid(logits)
         loss = criterion(outputs, target)
         # backpropagation
+        #loss.backward() #changed this
         loss.backward()
         # update optimizer parameters
         optimizer.step()  # updating weights
@@ -202,13 +203,3 @@ def plot_f1_graph(train_f1, valid_f1, cf, variation: str):
     plt.savefig(('../data/outputs/model_plots/f1-' + variation + cf["run_name"] + '.png'))
     plt.show()
 
-
-'''
-# ============ Save Model  =============== #
-torch.save({
-    'epoch': epoch,
-    'model_state_dict': model.state_dict(),
-    'optimizer_state_dict': optimizer.state_dict(),
-    'loss': criterion,
-}, ('../data/outputs/model_saves/' + cf["run_name"] + ".pth"))
-'''
