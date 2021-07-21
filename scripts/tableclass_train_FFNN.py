@@ -33,7 +33,7 @@ STEPS
 torch.manual_seed(1)
 
 # ============ Open Config File =============== #
-with open("../config/config_tableclass_CNN.json") as config:
+with open("../config/config_tableclass_FCNN.json") as config:
     cf = json.load(config)
 
 # ============ Load and Check Tokenizer =========== #
@@ -51,7 +51,7 @@ train_dataloader, train_dataset, valid_dataloader, valid_dataset, test_dataloade
     inp_data_dir="../data/train-test-val",
     inp_tokenizer="../tokenizers/tokenizerPKtablesSpecialTokens5000.json",
     max_len=cf["max_len"], batch_size=cf["batch_size"], val_batch_size=cf["val_batch_size"],
-    n_workers=cf["n_workers"], remove_html=cf["remove_html"], baseline_only=cf["baseline_only"])
+    n_workers=cf["n_workers"], remove_html=cf["remove_html"], baseline_only=cf["baseline_only"], aug_all=False, aug_nums=True, aug_syns=False) #
 
 # ============ Set Device =============== #
 # device config
@@ -61,19 +61,13 @@ device = 'cpu'
 torch.autograd.set_detect_anomaly(True)
 
 # ============ Get Model =============== #
-#model = NeuralNet(num_classes=cf["num_classes"], embeds_size=cf["embeds_size"],
-                  #vocab_size=vocab_size, padding_idx=padding_idx, hidden_size=cf["hidden_size"]).to(device)
-model = CNN(seq_len=cf["seq_len"], out_channels=cf["out_channels"], input_channels=cf["input_channels"],
-            num_classes=cf["num_classes"], embeds_size=cf["embeds_size"], kernel_heights=cf["kernel_heights"],
-            vocab_size=vocab_size, padding_idx=padding_idx, stride=cf["stride"]).to(device)
+model = NeuralNet(num_classes=cf["num_classes"], embeds_size=cf["embeds_size"],
+                  vocab_size=vocab_size, padding_idx=padding_idx, hidden_size=cf["hidden_size"]).to(device)
+#model = CNN(seq_len=cf["seq_len"], out_channels=cf["out_channels"], input_channels=cf["input_channels"],
+            #num_classes=cf["num_classes"], embeds_size=cf["embeds_size"], kernel_heights=cf["kernel_heights"],
+            #vocab_size=vocab_size, padding_idx=padding_idx, stride=cf["stride"]).to(device)
 
 # ============ Define Loss and Optimiser =============== #
-train_labels = np.stack([x["labels"].numpy() for x in train_dataset], axis=0)
-neg_samples = train_labels.shape[0] - np.sum(train_labels, axis=0)
-weights = neg_samples/(np.sum(train_labels, axis=0))
-batch_weights = np.tile(weights, (cf["batch_size"], 1))
-weights = torch.from_numpy(batch_weights)
-
 criterion = nn.BCELoss()  # reduction? weight=weights
 #criterion = nn.BCEWithLogitsLoss(pos_weight=weights, reduce=None)
 optimizer = torch.optim.Adam(model.parameters(), lr=cf["lr"])

@@ -4,6 +4,6 @@ import numpy as np
 train_dataloader, train_dataset, valid_dataloader, valid_dataset, test_dataloader, test_dataset = get_dataloaders(inp_data_dir="../data/train-test-val",
                                                                        inp_tokenizer="../tokenizers/tokenizeralltablesNotestNohtml5000.json",
                                                                        max_len=500, batch_size=50, val_batch_size=100,
-                                                                       n_workers=0, baseline_only=True, remove_html=True)
+                                                                       n_workers=0, baseline_only=True, remove_html=True) #,aug_all=False, aug_nums=True, aug_syns=False)
 
 a= 1
