@@ -3,7 +3,7 @@
 To run tensor board: 
 ```
 cd data
-tensorboard --logdir=runs 
+tensorboard --logdir=runs --bind_all
 ```
 
 To review labels vs predictions and make corrections: 

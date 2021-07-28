@@ -25,6 +25,24 @@ class NeuralNet(nn.Module):
         # no activation and no softmax at the end
         return out_l2
 
+class BOW_NeuralNet(nn.Module):
+    def __init__(self, num_classes, hidden_size, input_size, drop_out):
+        super(BOW_NeuralNet, self).__init__()
+        self.l1 = nn.Linear(input_size, num_classes)  # hidden size or number of classes if only one layer
+        self.relu = nn.ReLU()
+        self.l2 = nn.Linear(hidden_size, num_classes)
+        self.dropout = nn.Dropout(drop_out)  # define proportion of neurons to drop out
+        # self.double() #if feeding in a Torch.Double type
+
+    def forward(self, x):
+        x = x.float()
+        #max_pooled = torch.max(x, dim=1, keepdim=False)[0].float()
+        out_dropout = self.dropout(x)
+        out_l1 = self.l1(out_dropout)
+        out_relu = self.relu(out_l1)
+        #out_l2 = self.l2(out_relu)
+        return out_relu
+
 #========== CNN CLASS ============#
 
 class CNN(nn.Module):

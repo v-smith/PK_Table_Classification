@@ -61,8 +61,35 @@ def findall_rownames(table):
 
 def join_info(title, column_names, row_names):
     final_list = []
+    final_list.append("[CAPTION]")
     final_list.extend(title)
+    final_list.append("[FIRST_ROW]")
     final_list.extend(column_names)
+    final_list.append("[FIRST_COL]")
     final_list.extend(row_names)
+    final_str = ' '.join(final_list)
+    return final_str
+
+def findall_rows(table):
+    table_rows = table.find_all('tr')
+    row_names = []
+    for tr in table_rows:
+        td = tr.find_all('td')
+        row = [i.text for i in td]
+        if row:
+            row_names.append(row[1:])
+    return row_names
+
+
+def join_section_info(title, column_names, row_names, all_rows):
+    final_list = []
+    final_list.append("[CAPTION]")
+    final_list.extend(title)
+    final_list.append("[FIRST_ROW]")
+    final_list.extend(column_names)
+    final_list.append("[FIRST_COL]")
+    final_list.extend(row_names)
+    final_list.append("[TABLE_BODY]")
+    final_list.extend(all_rows)
     final_str = ' '.join(final_list)
     return final_str

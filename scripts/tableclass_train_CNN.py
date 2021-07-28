@@ -12,7 +12,9 @@ import numpy as np
 import json
 import os
 from torch.utils.tensorboard import SummaryWriter
+from data_loaders.models import CNN
 
+writer = SummaryWriter("../data/runs/")
 
 # noinspection PyUnresolvedReferences
 matplotlib.style.use('ggplot')
@@ -31,19 +33,16 @@ STEPS
 torch.manual_seed(1)
 
 # ============ Open Config File =============== #
-with open("../config/config_tableclass_FCNN.json") as config:
+with open("../config/config_tableclass_CNN.json") as config:
     cf = json.load(config)
-
-writer = SummaryWriter(log_dir=("../data/runs/" + cf["run_name"])) #, filename_suffix=cf["run_name"])
 
 # ============ Load and Check Tokenizer =========== #
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 tokenizer = PreTrainedTokenizerFast(tokenizer_file=cf["tokenizer_file"])
-tokenizer.add_tokens(["[CAPTION]", "[FIRST_ROW]", "[FIRST_COL]", "[TABLE_BODY]"], special_tokens=True)
 tokenizer.add_special_tokens({'pad_token': '[PAD]'})
 
 # get vocab size and padding index
-vocab_size = tokenizer.vocab_size + len(tokenizer.all_special_tokens) + len(tokenizer.get_added_vocab())
+vocab_size = tokenizer.vocab_size + len(tokenizer.all_special_tokens)
 padding_idx = tokenizer.pad_token_id
 
 # ============ Get data loaders and datasets =============== #
@@ -52,8 +51,8 @@ train_dataloader, train_dataset, valid_dataloader, valid_dataset, test_dataloade
     inp_data_dir="../data/train-test-val",
     inp_tokenizer="../tokenizers/tokenizerPKtablesSpecialTokens5000.json",
     max_len=cf["max_len"], batch_size=cf["batch_size"], val_batch_size=cf["val_batch_size"],
-    n_workers=cf["n_workers"], remove_html=cf["remove_html"], baseline_only=cf["baseline_only"],
-    aug_all=cf["aug_all"], aug_nums=cf["aug_nums"], aug_syns=cf["aug_syns"], aug_both= cf["aug_both"], sampler=cf["sampler"], sections=cf["sections_only"])
+    n_workers=cf["n_workers"], remove_html=cf["remove_html"], baseline_only=cf["baseline_only"], aug_all=False, aug_nums=True, aug_syns=False,
+    sampler=True)
 
 # ============ Set Device =============== #
 # device config
@@ -63,8 +62,9 @@ device = 'cpu'
 torch.autograd.set_detect_anomaly(True)
 
 # ============ Get Model =============== #
-model = NeuralNet(num_classes=cf["num_classes"], embeds_size=cf["embeds_size"],
-                  vocab_size=vocab_size, padding_idx=padding_idx, hidden_size=cf["hidden_size"]).to(device)
+model = CNN(seq_len=cf["seq_len"], out_channels=cf["out_channels"], input_channels=cf["input_channels"],
+            num_classes=cf["num_classes"], embeds_size=cf["embeds_size"], kernel_heights=cf["kernel_heights"],
+            vocab_size=vocab_size, padding_idx=padding_idx, stride=cf["stride"]).to(device)
 
 # ============ Define Loss and Optimiser =============== #
 criterion = nn.BCELoss()  # reduction? weight=weights

@@ -1,23 +1,18 @@
 {
-  "run_name": "FFNN-classification-TensorboardTest-",
+  "run_name": "FFNN-classification-TFIDF-",
   "tokenizer_file": "../tokenizers/tokenizerPKtablesSpecialTokens5000.json",
-  "max_len": 500,
+  "input_size": 5000,
   "num_classes":9,
   "hidden_size":100,
   "epochs":100,
   "batch_size":64,
   "val_batch_size":64,
   "n_workers":0,
-  "lr":0.01,
-  "embeds_size":100,
+  "lr":0.001,
   "drop_out": 0.25,
-  "remove_html": false,
+  "remove_html": true,
   "baseline_only": false,
-  "sections_only": true,
   "aug_all" : false,
   "aug_nums": false,
-  "aug_syns": false,
-  "aug_both": false,
-  "sampler" : false
+  "aug_syns": false
 }
-

@@ -3,16 +3,11 @@ from sklearn.metrics import classification_report
 from data_loaders.table_data_loaders import get_dataloaders
 from data_loaders.models import NeuralNet
 import torch
-import jsonlines
 from transformers import PreTrainedTokenizerFast
-import matplotlib
-from tableclass_engine import train, validate, label_wise_metrics, \
-    plot_loss_graph, plot_f1_graph, f1_nozeros, save_checkpoint
+from tableclass_engine import f1_nozeros
 import numpy as np
 import json
 import os
-from prodigy.components.db import connect
-from prodigy.util import read_jsonl
 
 # ============ Open Config File =============== #
 with open("../config/config_tableclass_FCNN.json") as config:
@@ -21,10 +16,11 @@ with open("../config/config_tableclass_FCNN.json") as config:
 # ============ Load and Check Tokenizer =========== #
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 tokenizer = PreTrainedTokenizerFast(tokenizer_file=cf["tokenizer_file"])
+tokenizer.add_tokens(["[CAPTION]", "[FIRST_ROW]", "[FIRST_COL]", "[TABLE_BODY]"], special_tokens=True)
 tokenizer.add_special_tokens({'pad_token': '[PAD]'})
 
 # get vocab size and padding index
-vocab_size = tokenizer.vocab_size + len(tokenizer.all_special_tokens)
+vocab_size = tokenizer.vocab_size + len(tokenizer.all_special_tokens) + len(tokenizer.get_added_vocab())
 padding_idx = tokenizer.pad_token_id
 
 # ============ Get data loaders and datasets =============== #
@@ -33,7 +29,8 @@ train_dataloader, train_dataset, valid_dataloader, valid_dataset, test_dataloade
     inp_data_dir="../data/train-test-val",
     inp_tokenizer="../tokenizers/tokenizerPKtablesSpecialTokens5000.json",
     max_len=cf["max_len"], batch_size=cf["batch_size"], val_batch_size=cf["val_batch_size"],
-    n_workers=cf["n_workers"],  baseline_only=False, remove_html=False)
+    n_workers=cf["n_workers"], remove_html=cf["remove_html"], baseline_only=cf["baseline_only"],
+    aug_all=cf["aug_all"], aug_nums=cf["aug_nums"], aug_syns=cf["aug_syns"], aug_both=cf["aug_both"], sampler=cf["sampler"], sections=cf["sections_only"])
 
 
 # ============ Set Device =============== #
@@ -50,7 +47,7 @@ model = NeuralNet(num_classes=cf["num_classes"], embeds_size=cf["embeds_size"],
 optimizer = torch.optim.Adam(model.parameters(), lr=cf["lr"])
 
 # load the model checkpoint
-model_checkpoint = torch.load("../data/outputs/model_saves/trial-FFNN-classificationmodel_best.pth.tar")
+model_checkpoint = torch.load("../data/outputs/model_saves/FFNN-classification-TableSections-model_best.pth.tar")
 
 # load model weights state_dict and optimizer state dict
 model.load_state_dict(model_checkpoint['state_dict'])
@@ -79,16 +76,17 @@ with torch.no_grad():
 all_labels = np.stack(all_labs, axis=0)
 all_predictions = np.stack(all_preds, axis=0)
 
-test_class_dict = classification_report(all_labels,all_preds, output_dict=True)
-test_class_report = classification_report(all_labels,all_preds)
+test_class_dict = classification_report(all_labels, all_preds, output_dict=True)
+test_class_report = classification_report(all_labels, all_preds)
 test_f1_positives_macro, test_f1_positives_weighted = f1_nozeros(test_class_dict)
 
 # prints
 print(f"F1 Weighted (Positive Classes Only): {test_f1_positives_weighted} | "
       f"F1 not weighted (Macro and Positive Classes Only): {test_f1_positives_macro}")
 print(f"Classification Report: {test_class_report}")
-a = 1
 
+a=1
+'''
 #prepare prodigy dataset to compare labels and predicitions
 all_tokens = [np.asarray(item["input_ids"]) for item in test_dataset]
 htmls= [tokenizer.decode(tokens) for tokens in all_tokens]
@@ -138,5 +136,5 @@ db.add_dataset("predictions")
 db.add_examples(compare_preds, ["predictions"])
 dataset_preds = db.get_dataset("predictions")
 print(f"===== length labels {len(dataset_labs)}, length of preds: {len(dataset_preds)}=====")
-
+'''
 a=1

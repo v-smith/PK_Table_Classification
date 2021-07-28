@@ -10,15 +10,18 @@ import matplotlib.pyplot as plt
 import matplotlib
 import torch
 import os
-import json
 import bs4 as bs
-from data_loaders.extract_baseline import findall_rownames, findall_colnames, join_info, join_section_info, findall_rows
+from data_loaders.extract_baseline import findall_rownames, findall_colnames, join_info
 import random
 from torch.utils.data.sampler import Sampler
+from iterstrat.ml_stratifiers import MultilabelStratifiedShuffleSplit
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.feature_extraction.text import HashingVectorizer
 
 matplotlib.style.use('ggplot')
-
 # my_test_data= [{"html":"<html><table><th> blah blah <\html>", "accept":[1,2,3,4,5]}, {"html":"<html><table><th> blah blah <\html>", "accept":[1,2,3,4,5]}, {"html":"<html><table><th> blah blah <\html>", "accept":[1,2,3]}, {"html":"<html><table><th> blah blah <\html>", "accept":[1]}]
+
 
 def convert_labels_5s(inp_labels: List[List[str]]):
     """Transforms labels to vector of binary numbers"""
@@ -96,23 +99,6 @@ def extract_all_ids_withoutpad(html_encodings: List[List[int]]):
     return ids_list
 
 
-def separated_sections(inp_samples: List[str]):
-    """Extracts just title, first column and first row contents from table"""
-    processed_htmls = []
-    for html in inp_samples:
-        title = re.findall("\<h4>(.*?)\</h4>", html)
-        soup = bs.BeautifulSoup(html, 'lxml')
-        table = soup.find('table')
-        all_rows = findall_rows(table)
-        body = [item for sublist in all_rows for item in sublist]
-        row_names = findall_rownames(table)
-        col_names = findall_colnames(table)
-        final_html = join_section_info(title, col_names, row_names, body)
-        processed_htmls.append(final_html)
-
-    return processed_htmls
-
-
 class PKDataset(Dataset):
 
     def __init__(self, encodings, labels, task_hash, input_hash):
@@ -123,7 +109,8 @@ class PKDataset(Dataset):
 
     # support indexing such that dataset[i] can be used to get i-th sample
     def __getitem__(self, index):
-        item = {key: torch.tensor(val[index]) for key, val in self.encodings.items()}
+        item = {}
+        item["input_ids"] = torch.tensor(self.encodings[index])  # bow
         item["labels"] = torch.tensor(self.labels[index]).type(
             torch.float32)  # torch.DoubleTensor # size [n_samples, n_labels]
         item["_task_hash"] = self.task_hash[index]
@@ -134,71 +121,66 @@ class PKDataset(Dataset):
         return len(self.labels)
 
 
-def process_table_data(inp_samples: List[Dict], inp_tokenizer: str, max_len: int,
-                       dataset_name: str, remove_html: bool, baseline_only: bool, remove_5s: bool,
-                       sections: bool) -> PKDataset:
+def process_table_data(inp_samples: List[Dict], inp_tokenizer: str, remove_html: bool, baseline_only: bool) -> PKDataset:
     """
     Generates a pytorch dataset containing encoded tokens and labels
     """
-
-    print(f"\n==== {dataset_name.upper()} set ====")
     htmls = [sample["html"] for sample in inp_samples]
 
     if baseline_only:
         prepro_htmls = title_header_cols(inp_samples=htmls)
-    elif sections:
-        prepro_htmls = separated_sections(inp_samples=htmls)
     else:
         prepro_htmls = preprocess_htmls(inp_samples=htmls, remove_html=remove_html)
 
     labels = [sample["accept"] for sample in inp_samples]
-    if remove_5s:
-        labels = convert_labels_5s(inp_labels=labels)
-    else:
-        labels = convert_labels(inp_labels=labels)
+    train_labels= labels[:1500]
+    train_labels = convert_labels(inp_labels=train_labels)
+    val_labels= labels[1500:1833]
+    val_labels= convert_labels(inp_labels=val_labels)
+    test_labels= labels[1833:]
+    test_labels = convert_labels_5s(inp_labels=test_labels)
 
     task_hash = [sample["_task_hash"] for sample in inp_samples]
     input_hash = [sample["_input_hash"] for sample in inp_samples]
 
+    #
     tokenizer = PreTrainedTokenizerFast(tokenizer_file=inp_tokenizer)
-    tokenizer.add_tokens(["[CAPTION]", "[FIRST_ROW]", "[FIRST_COL]", "[TABLE_BODY]"], special_tokens=True)
-    tokenizer.add_special_tokens({'pad_token': '[PAD]'})
-    table_encodings = tokenizer(prepro_htmls, padding=True, truncation=True, max_length=max_len)
+    vocab = tokenizer.vocab
+    table_encodings = tokenizer(prepro_htmls)
     table_ids_no_pad = extract_all_ids_withoutpad(table_encodings["input_ids"])
-    print_token_stats(all_tokens=table_ids_no_pad, dataset_name=dataset_name, plot_histogram=True)
+    tokens = [tokenizer.convert_ids_to_tokens(x) for x in table_ids_no_pad]
+    strs = [" ".join(x) for x in tokens]
 
-    print(f"Number of tables : {len(table_ids_no_pad)}")
+    # tfidf
+    vectorizer = TfidfVectorizer(max_features=5000, vocabulary=vocab, lowercase=False, preprocessor=None)
+    vector = vectorizer.fit_transform(strs)
 
-    input_ids = table_encodings["input_ids"]
-    check_tokens = [tokenizer.convert_ids_to_tokens(x) for x in input_ids]
-    print(check_tokens[1])
-    print(table_encodings.input_ids[1])
-    print(labels[1])
-    torch_dataset = PKDataset(encodings=table_encodings, labels=labels, task_hash=task_hash, input_hash=input_hash)
+    # CountVectorizer (BOW)
+    #vectorizer = CountVectorizer(max_features=5000, vocabulary=vocab,lowercase=False, preprocessor=None)
+    #vector = vectorizer.fit_transform(strs)
 
-    return torch_dataset
+    train = vector[:1500].toarray()
+    val = vector[1500:1833].toarray()
+    test = vector[1833:].toarray()
+
+    train_dataset = PKDataset(encodings=train, labels=train_labels, task_hash=task_hash[:1500], input_hash=input_hash[:1500])
+    val_dataset = PKDataset(encodings=val, labels=val_labels, task_hash=task_hash[1500:1833], input_hash=input_hash[1500:1833])
+    test_dataset = PKDataset(encodings=test, labels=test_labels, task_hash=task_hash[1833:], input_hash=input_hash[1833:])
+    return train_dataset, val_dataset, test_dataset
 
 
-def make_dataloader(inp_samples: List[Dict], batch_size: int, inp_tokenizer: str, max_len: int,
-                    shuffle: bool, sampler: bool, n_workers: int, dataset_name: str, remove_html: bool,
-                    baseline_only: bool,
-                    remove_5s: bool, sections: bool) -> [DataLoader, PKDataset]:
-    torch_dataset = process_table_data(inp_samples=inp_samples, inp_tokenizer=inp_tokenizer, max_len=max_len,
-                                       dataset_name=dataset_name, remove_html=remove_html, baseline_only=baseline_only,
-                                       remove_5s=remove_5s, sections=sections)
+def make_dataloader(inp_samples: List[Dict], batch_size: int, n_workers: int, remove_html: bool,
+                    baseline_only: bool, remove_5s: bool, inp_tokenizer: str) -> [DataLoader, PKDataset]:
 
-    if sampler:
-        train_idx = list(range(len(torch_dataset)))
-        under_sampler = MultilabelBalancedRandomSampler(torch_dataset, train_idx, class_choice="least_sampled")
-        loader = DataLoader(torch_dataset, batch_size=batch_size, num_workers=n_workers, sampler=under_sampler)
+    train_dataset, val_dataset, test_dataset = process_table_data(inp_samples=inp_samples, remove_html=remove_html,
+                                                                  baseline_only=baseline_only,
+                                                                  inp_tokenizer=inp_tokenizer)
 
-    elif shuffle:
-        loader = DataLoader(torch_dataset, batch_size=batch_size, num_workers=n_workers, shuffle=True)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, num_workers=n_workers, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, num_workers=n_workers)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, num_workers=n_workers)
 
-    else:
-        loader = DataLoader(torch_dataset, batch_size=batch_size, num_workers=n_workers)
-
-    return loader, torch_dataset
+    return train_loader, train_dataset, val_loader, val_dataset, test_loader, test_dataset
 
 
 class MultilabelBalancedRandomSampler(Sampler):
@@ -228,7 +210,7 @@ class MultilabelBalancedRandomSampler(Sampler):
         self.labels = torch.stack([sample["labels"] for sample in dataset])
         self.indices = indices
         if self.indices is None:
-            self.indices = range(len(self.labels))
+            self.indices = range(len(labels))
 
         self.num_classes = self.labels.shape[1]
 
@@ -307,22 +289,19 @@ def read_dataset(data_dir_inp: str, dataset_name: str):
     json_list = read_jsonl(file_path=file_path)
     return json_list
 
+
 def repl1(match):
     matched = match.group(0)
-    if '.' or 'e' in matched.lower():
-        num = round(float(matched) * 0.9, 1)
-    else:
-        num = int(matched) + 1
+    # if random.random() <= 0.5:
+    num = round(float(matched) * 0.9, 1)
     return str(num)
 
 
 def repl2(match):
     matched = match.group(0)
-    if '.' or 'e' in matched.lower():
-        num = round(float(matched) * 1.1, 1)
-    else:
-        num = int(matched) - 1
+    num = round(float(matched) * 1.1, 1)
     return str(num)
+
 
 def repl3(match):
     matched = match.group(0)
@@ -343,86 +322,89 @@ def augment_nums(inp_samples: List[Dict]):
         labels = sample["accept"]
         task_hash = sample["_task_hash"]
         input_hash = sample["_input_hash"]
-        if random.choice([0, 1]) < 0.5:
-            aug_html = re.sub(r'[-+]?([0-9]*\.?[0-9]+)(?:[eE][-+]?[0-9]+)?', repl1, sample["html"])
-            # html_down_20 = re.sub(r'[-+]?([0-9]*\.?[0-9]+)(?:[eE][-+]?[0-9]+)?', repl4, sample["html"])
-            # html_up_20 = re.sub(r'[-+]?([0-9]*\.?[0-9]+)(?:[eE][-+]?[0-9]+)?', repl3, sample["html"])
-        else:
-            aug_html = re.sub(r'[-+]?([0-9]*\.?[0-9]+)(?:[eE][-+]?[0-9]+)?', repl2, sample["html"])
+        html_down = re.sub(r'[-+]?([0-9]*\.?[0-9]+)(?:[eE][-+]?[0-9]+)?', repl1, sample["html"])
+        html_down_20 = re.sub(r'[-+]?([0-9]*\.?[0-9]+)(?:[eE][-+]?[0-9]+)?', repl4, sample["html"])
+        html_up_20 = re.sub(r'[-+]?([0-9]*\.?[0-9]+)(?:[eE][-+]?[0-9]+)?', repl3, sample["html"])
+        html_up = re.sub(r'[-+]?([0-9]*\.?[0-9]+)(?:[eE][-+]?[0-9]+)?', repl2, sample["html"])
+        augmented_samples.append(
+            {"html": html_down, "accept": labels, "_task_hash": task_hash, "_input_hash": input_hash})
+        augmented_samples.append(
+            {"html": html_up, "accept": labels, "_task_hash": task_hash, "_input_hash": input_hash})
+        augmented_samples.append(
+            {"html": html_down_20, "accept": labels, "_task_hash": task_hash, "_input_hash": input_hash})
+        augmented_samples.append(
+            {"html": html_up_20, "accept": labels, "_task_hash": task_hash, "_input_hash": input_hash})
+
+    return augmented_samples
+
+
+def augment_syns(inp_samples: List[Dict]):
+    """Replaces PK terms and units with synonyms, Please note input and task hashes will need to be reset at the end if this function is used """
+    augmented_samples = []
+    # https://onlinelibrary.wiley.com/doi/full/10.1046/j.1365-2885.2001.00340.x
+    units_dict = {"μg/mL": "ng/mL", "mg": "g", "min": "hr", "min-1": "hr-1", "mL/kg": "L/kg", "mL/min": "mL/h",
+                  "μg · h/mL": "μg × h/mL", "%": "percent", "mg/kg": "μg/kg", "days": "hrs", "day": "week"}
+    terms_dict = {"Cmax": "C p,ss(max)", "Cavg": "C p(avg)", "C min": "C p(last)", "C p(12h)": "C p(0)",
+                  "t 1/2": "t 1/2(a)", "tmax": "t 1/2(d)", "MRT": "MAT",
+                  "k 12": "k 21", "k el": "k a", "V D": "V c", "V D(area)": "V (d(ss))",
+                  "AUC": "AUC0–12", "Area under the curve": "AUC0-24", "F a": "f el", "Sample Timings": "Times",
+                  "n=": "number of subjects", "fed": "fasted", "IV": "SC", "SC": "IM", "IM": "IV",
+                  "Renal Impairment": "RI",
+                  "Emax": "EC50", "IC50": "EC50", "Ratio": "GMR"}
+    both_dict = {**units_dict, **terms_dict}
+
+    for sample in inp_samples:
+        html = sample["html"]
+        labels = sample["accept"]
+        task_hash = sample["_task_hash"]
+        input_hash = sample["_input_hash"]
+        units_dict_lower = {k.lower(): v for k, v in units_dict.items()}
+        terms_dict_lower = {k.lower(): v for k, v in terms_dict.items()}
+        both_dict_lower = {k.lower(): v for k, v in both_dict.items()}
+        unit_pattern = '|'.join(sorted(re.escape(k) for k in units_dict))
+        term_pattern = '|'.join(sorted(re.escape(k) for k in terms_dict))
+        both_pattern = '|'.join(sorted(re.escape(k) for k in both_dict))
+
+        def repl_units(match):
+            matched = str(match.group(0)).lower()
+            try:
+                value = units_dict_lower[matched]
+            except:
+                value = matched
+            return value
+
+        def repl_terms(match):
+            matched = str(match.group(0)).lower()
+            try:
+                value = terms_dict_lower[matched]
+            except:
+                value = matched
+            return value
+
+        def repl_both(match):
+            matched = str(match.group(0)).lower()
+            try:
+                value = both_dict_lower[matched]
+            except:
+                value = matched
+            return value
+
+        units_html = re.sub(unit_pattern, repl_units, html, flags=re.IGNORECASE)
+        terms_html = re.sub(term_pattern, repl_terms, html, flags=re.IGNORECASE)
+        both_html = re.sub(both_pattern, repl_both, html, flags=re.IGNORECASE)
 
         augmented_samples.append(
-            {"html": aug_html, "accept": labels, "_task_hash": task_hash, "_input_hash": input_hash})
+            {"html": units_html, "accept": labels, "_task_hash": task_hash, "_input_hash": input_hash})
+        augmented_samples.append(
+            {"html": terms_html, "accept": labels, "_task_hash": task_hash, "_input_hash": input_hash})
+        augmented_samples.append(
+            {"html": both_html, "accept": labels, "_task_hash": task_hash, "_input_hash": input_hash})
 
     return augmented_samples
 
 
-test_sample = [{"html": "2 2 3 6 7 89 2.0 μg/mL μG/mL μg/mL", "accept": [2, 3, 4], "_input_hash": 2, "_task_hash": 4},{"html": "minutes, seconds, h, d and month μg/mL μG/mL μg/mL", "accept": [2, 7, 9], "_input_hash": 5,"_task_hash": 6}]
-augment_nums(test_sample)
-
-def get_match_pattern(af):
-    all_matches = {}
-    for dic in af:
-        match_patterns = {}
-        for subdic in af[dic]:
-            match_lst = af[dic][subdic]
-            match_lst = [x.lower() for x in match_lst]
-            match_pattern = " |".join(sorted(re.escape(x) for x in match_lst))
-            match_patterns[subdic] = match_pattern
-            all_matches.update(match_patterns)
-    return all_matches
-
-
-def grab_children(af):
-    dict_list = []
-    local_list = []
-    for key, value in af.items():
-        dict_list.append(value)
-    for item in dict_list:
-        for k, v in item.items():
-            local_list.append(v)
-    return local_list
-
-
-def repl_syns(match):
-    matched = str(match.group(0)).lower().strip()
-
-    with open("../config/data_augment.json") as f:
-        af = json.load(f)
-
-    # list of replacement lists
-    match_lsts = grab_children(af)
-    match_lsts = [[x.lower().strip() for x in lst] for lst in match_lsts]
-    match_lst = [lst for lst in match_lsts if matched in lst][0]
-    if matched in match_lst:
-        replace_lst = [n for n in match_lst if n != matched]
-        value = random.choice(replace_lst)
-    else:
-        print("error")
-    value = value.center((len(value) + 2))
-    return str(value)
-
-
-def augment_syns(inp_samples: List[Dict], aug_file):
-    """Replaces PK terms and units with synonyms, Please note input and task hashes will need to be reset at the end if this function is used """
-
-    with open(aug_file) as f:
-        af = json.load(f)
-    match_patterns = get_match_pattern(af)
-
-    htmls = [sample["html"] for sample in inp_samples]
-    labels = [sample["accept"] for sample in inp_samples]
-    task_hashes = [sample["_task_hash"] for sample in inp_samples]
-    input_hashes = [sample["_input_hash"] for sample in inp_samples]
-
-    augmented_htmls = htmls
-    for k, v in match_patterns.items():
-        augmented_htmls = [re.sub(match_patterns[k], repl_syns, html, flags=re.IGNORECASE) for html in augmented_htmls]
-
-    augmented_samples = []
-    for html, label, task, input in zip(augmented_htmls, labels, task_hashes, input_hashes):
-        augmented_samples.append({"html": html, "accept": label, "_task_hash": task, "_input_hash": input})
-
-    return augmented_samples
+test_sample = [{"html": "μg/mL μG/mL μg/mL", "accept": [2, 3, 4], "_input_hash": 2, "_task_hash": 4},
+               {"html": "μg/mL μG/mL μg/mL", "accept": [2, 7, 9], "_input_hash": 5, "_task_hash": 6}]
 
 
 def augment_all(inp_samples: List[Dict]):
@@ -430,19 +412,16 @@ def augment_all(inp_samples: List[Dict]):
     Please note input and task hashes will need to be reset at the end if this function is used """
     augmented_samples = []
     number_samples = augment_nums(inp_samples)
-    combined_samples = augment_syns(number_samples, "../config/data_augment.json")
-    augmented_samples.extend(combined_samples)
+    syn_samples = augment_syns(inp_samples)
+    augmented_samples.extend(number_samples)
+    augmented_samples.extend(syn_samples)
     return augmented_samples
 
 
-# test_sample = [
-# {"html": " 2 3 4 days auclast and emax african μg/mL μG/mL μg/mL", "accept": [2, 3, 4], "_input_hash": 2, "_task_hash": 4},
-# {"html": "4 7.0 42 minutes, seconds, h, d and month μg/mL μG/mL μg/mL", "accept": [2, 7, 9], "_input_hash": 5,
-# "_task_hash": 6}]
+# my_test_data = [{"html": "<html><table><th> Mg mg min ml/kg ml/kg Cmax, k el", "accept": [1, 2, 3, 4, 5]},{"html": "<html><table><th> blah blah <\html>", "accept": [1, 2, 3, 4, 5]}]
 
-def get_dataloaders(inp_data_dir: str, inp_tokenizer: str, max_len: int,
-                    batch_size: int, val_batch_size: int, n_workers: int, remove_html: bool, baseline_only: bool,
-                    aug_all: bool, aug_nums: bool, aug_syns: bool, aug_both: bool, sampler: bool, sections: bool) -> \
+def get_dataloaders(inp_data_dir: str, batch_size: int, n_workers: int, inp_tokenizer: str, remove_html: bool, baseline_only: bool,
+                    aug_all: bool, aug_nums: bool, aug_syns: bool) -> \
         Iterable[DataLoader]:
     """
     Function to generate data loaders
@@ -461,19 +440,12 @@ def get_dataloaders(inp_data_dir: str, inp_tokenizer: str, max_len: int,
     if aug_all:
         augmented_samples = augment_all(train_samples)
         train_samples.extend(augmented_samples)
-    elif aug_nums:
+    if aug_nums:
         augmented_samples = augment_nums(train_samples)
         train_samples.extend(augmented_samples)
-    elif aug_syns:
-        augmented_samples = augment_syns(train_samples, "../config/data_augment.json")
+    if aug_syns:
+        augmented_samples = augment_syns(train_samples)
         train_samples.extend(augmented_samples)
-    elif aug_both:
-        syns_samples = augment_syns(train_samples, "../config/data_augment.json")
-        nums_samples = augment_nums(train_samples)
-        train_samples.extend(syns_samples)
-        train_samples.extend(nums_samples)
-    else:
-        train_samples = train_samples
 
     print(f"Total Length of Train Samples is: {len(train_samples)}")
 
@@ -484,25 +456,14 @@ def get_dataloaders(inp_data_dir: str, inp_tokenizer: str, max_len: int,
     test_samples = [{"html": dic["html"], "accept": dic["accept"], "_task_hash": dic["_task_hash"],
                      "_input_hash": dic["_input_hash"]} for dic in test_samples]
 
-    train_dataloader, train_dataset = make_dataloader(inp_samples=train_samples, batch_size=batch_size,
-                                                      inp_tokenizer=inp_tokenizer,
-                                                      max_len=max_len, shuffle=True, sampler=sampler,
-                                                      n_workers=n_workers,
-                                                      dataset_name='training', remove_html=remove_html,
-                                                      baseline_only=baseline_only,
-                                                      remove_5s=False, sections=sections)
-    valid_dataloader, valid_dataset = make_dataloader(inp_samples=valid_samples, batch_size=val_batch_size,
-                                                      inp_tokenizer=inp_tokenizer,
-                                                      max_len=max_len, shuffle=False, sampler=False,
-                                                      n_workers=n_workers,
-                                                      dataset_name='dev', remove_html=remove_html,
-                                                      baseline_only=baseline_only,
-                                                      remove_5s=False, sections=sections)
-    test_dataloader, test_dataset = make_dataloader(inp_samples=test_samples, batch_size=val_batch_size,
-                                                    inp_tokenizer=inp_tokenizer,
-                                                    max_len=max_len, shuffle=False, sampler=False, n_workers=n_workers,
-                                                    dataset_name='test', remove_html=remove_html,
-                                                    baseline_only=baseline_only,
-                                                    remove_5s=True, sections=sections)
+    all_samples = train_samples + valid_samples + test_samples
+
+    train_dataloader, train_dataset, valid_dataloader, valid_dataset, test_dataloader, test_dataset = make_dataloader(
+        inp_samples=all_samples, batch_size=batch_size,
+        inp_tokenizer=inp_tokenizer,
+        n_workers=n_workers,
+        remove_html=remove_html,
+        baseline_only=baseline_only,
+        remove_5s=False)
 
     return train_dataloader, train_dataset, valid_dataloader, valid_dataset, test_dataloader, test_dataset

@@ -1,7 +1,7 @@
 # imports
 from sklearn.metrics import classification_report
-from data_loaders.table_data_loaders import get_dataloaders
-from data_loaders.models import NeuralNet
+from data_loaders.bow_data_loaders import get_dataloaders
+from data_loaders.models import BOW_NeuralNet
 import torch
 import torch.nn as nn
 from transformers import PreTrainedTokenizerFast
@@ -13,6 +13,7 @@ import json
 import os
 from torch.utils.tensorboard import SummaryWriter
 
+writer = SummaryWriter("../data/runs/")
 
 # noinspection PyUnresolvedReferences
 matplotlib.style.use('ggplot')
@@ -31,29 +32,24 @@ STEPS
 torch.manual_seed(1)
 
 # ============ Open Config File =============== #
-with open("../config/config_tableclass_FCNN.json") as config:
+with open("../config/config_tablesclass_BOW.json") as config:
     cf = json.load(config)
-
-writer = SummaryWriter(log_dir=("../data/runs/" + cf["run_name"])) #, filename_suffix=cf["run_name"])
 
 # ============ Load and Check Tokenizer =========== #
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 tokenizer = PreTrainedTokenizerFast(tokenizer_file=cf["tokenizer_file"])
-tokenizer.add_tokens(["[CAPTION]", "[FIRST_ROW]", "[FIRST_COL]", "[TABLE_BODY]"], special_tokens=True)
 tokenizer.add_special_tokens({'pad_token': '[PAD]'})
 
 # get vocab size and padding index
-vocab_size = tokenizer.vocab_size + len(tokenizer.all_special_tokens) + len(tokenizer.get_added_vocab())
+vocab_size = tokenizer.vocab_size + len(tokenizer.all_special_tokens)
 padding_idx = tokenizer.pad_token_id
 
 # ============ Get data loaders and datasets =============== #
 
 train_dataloader, train_dataset, valid_dataloader, valid_dataset, test_dataloader, test_dataset = get_dataloaders(
-    inp_data_dir="../data/train-test-val",
-    inp_tokenizer="../tokenizers/tokenizerPKtablesSpecialTokens5000.json",
-    max_len=cf["max_len"], batch_size=cf["batch_size"], val_batch_size=cf["val_batch_size"],
+    inp_data_dir="../data/train-test-val", batch_size=cf["batch_size"], inp_tokenizer=cf["tokenizer_file"],
     n_workers=cf["n_workers"], remove_html=cf["remove_html"], baseline_only=cf["baseline_only"],
-    aug_all=cf["aug_all"], aug_nums=cf["aug_nums"], aug_syns=cf["aug_syns"], aug_both= cf["aug_both"], sampler=cf["sampler"], sections=cf["sections_only"])
+    aug_all=cf["aug_all"], aug_nums=cf["aug_nums"], aug_syns=cf["aug_syns"])
 
 # ============ Set Device =============== #
 # device config
@@ -63,8 +59,9 @@ device = 'cpu'
 torch.autograd.set_detect_anomaly(True)
 
 # ============ Get Model =============== #
-model = NeuralNet(num_classes=cf["num_classes"], embeds_size=cf["embeds_size"],
-                  vocab_size=vocab_size, padding_idx=padding_idx, hidden_size=cf["hidden_size"]).to(device)
+
+model = BOW_NeuralNet(num_classes=cf["num_classes"], input_size=cf["input_size"],
+                      hidden_size=cf["hidden_size"], drop_out=cf["drop_out"]).to(device)
 
 # ============ Define Loss and Optimiser =============== #
 criterion = nn.BCELoss()  # reduction? weight=weights
