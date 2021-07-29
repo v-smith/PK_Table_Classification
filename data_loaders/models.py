@@ -1,10 +1,9 @@
 import torch
 from torch import nn
-from torch.nn import functional as F
-from torch.autograd import Variable
+from torch.nn import functional as F, Sequential
 
-#========== Fully connected neural network with 2 hidden layers ============#
-#
+# ========== Fully connected neural network with 2 hidden layers and embeddings ============#
+
 class NeuralNet(nn.Module):
     def __init__(self, num_classes, hidden_size, embeds_size, vocab_size, padding_idx):
         super(NeuralNet, self).__init__()
@@ -25,6 +24,8 @@ class NeuralNet(nn.Module):
         # no activation and no softmax at the end
         return out_l2
 
+
+# ========== Fully connected neural network with 1 hidden layers and BOW ============#
 class BOW_NeuralNet(nn.Module):
     def __init__(self, num_classes, hidden_size, input_size, drop_out):
         super(BOW_NeuralNet, self).__init__()
@@ -36,71 +37,103 @@ class BOW_NeuralNet(nn.Module):
 
     def forward(self, x):
         x = x.float()
-        #max_pooled = torch.max(x, dim=1, keepdim=False)[0].float()
+        # max_pooled = torch.max(x, dim=1, keepdim=False)[0].float()
         out_dropout = self.dropout(x)
         out_l1 = self.l1(out_dropout)
         out_relu = self.relu(out_l1)
-        #out_l2 = self.l2(out_relu)
+        # out_l2 = self.l2(out_relu)
         return out_relu
 
-#========== CNN CLASS ============#
+
+# ========== CNN- NGRAM CLASS with Embeddings ============#
 
 class CNN(nn.Module):
 
-    def __init__(self, seq_len, num_classes, input_channels, out_channels, kernel_heights, embeds_size, vocab_size, padding_idx, stride):
+    def __init__(self, num_classes, input_channels, num_filters, filter_sizes, embeds_size, vocab_size,
+                 padding_idx, stride, drop_out):
         super(CNN, self).__init__()
         """
+        n.b this is an ngram of words architecture, meaning different kernel sizes are applied to the same table and each of these outputs will then be reduced with max pooling 
         output_size : 9 = (classes)
         input_channels : Number of input channels. Here it is 1 as the input data has dimension = (batch_size, num_seq, embedding_length)
-        out_channels : Number of output channels after convolution operation performed on the input matrix
-        kernel_heights : A list consisting of 3 different kernel_heights. Convolution will be performed 3 times and finally results from each kernel_height will be concatenated.
-        vocab_size : Size of the vocabulary containing unique words
-        embedding_size : Embedding dimension of  word embeddings
-        seq_len: input size (length of input sequence) 
+        filter_sizes : A list consisting of different kernel_heights. Convolution will be performed 3 times and finally results from each kernel_height will be concatenated.
         """
         self.embedding = torch.nn.Embedding(vocab_size, embeds_size, padding_idx=padding_idx)
         self.output_size = num_classes
         self.input_channels = input_channels
-        self.out_channels = out_channels
-        #number of words
-        self.kernel_heights = kernel_heights
-        # Number of strides for each convolution
-        self.stride = stride
+        self.num_filters = num_filters
+        self.filter_sizes = filter_sizes  # number of sub-words at a time
+        self.stride = stride  # Number of strides for each convolution, default is 1
 
-        #conv layers definition
-        self.conv1 = nn.Conv1d(self.input_channels, self.out_channels, (self.kernel_heights[0], embeds_size), self.stride)
-        self.conv2 = nn.Conv1d(self.input_channels, self.out_channels, (self.kernel_heights[1], embeds_size), self.stride)
-        self.conv3 = nn.Conv1d(self.input_channels, self.out_channels, (self.kernel_heights[2], embeds_size), self.stride)
-        # Dropout
-        self.dropout = nn.Dropout(0.25)
-        # fully connected layer
-        self.fc = nn.Linear(len(kernel_heights) * out_channels, num_classes)
-
-    def conv_block(self, tmp_input, conv_layer):
-        conv_out = conv_layer(tmp_input)  # conv_out.size() = (batch_size, out_channels, dim, 1)
-        activation = F.relu(conv_out.squeeze(3))  # activation.size() = (batch_size, out_channels, dim1)
-        #try these
-        max_out = F.max_pool1d(activation, activation.size()[2]).squeeze(2)
-        # maxpool_out.size() = (batch_size, out_channels)
-        #max pool across one dimension (all embeddings can be selected)
-        #average pool
-        return max_out
+        # conv layers definition
+        self.convs1 = nn.ModuleList([nn.Conv2d(self.input_channels, self.num_filters, (K, embeds_size), self.stride) for K in self.filter_sizes])
+        # self.conv2 = nn.Conv1d(self.input_channels, self.out_channels, (self.kernel_heights[1], embeds_size), self.stride)
+        self.dropout = nn.Dropout(drop_out)
+        self.fc1 = nn.Linear(len(filter_sizes) * num_filters, num_classes)
 
     def forward(self, x):
-        #tokens to embeddings
-        input = self.embedding(x)
-        #input.size()= (batch_size, num_seq, embedding length)
-        input = input.unsqueeze(1)
-        #conv layer 1
-        conv1= self.conv_block(input, self.conv1)
-        conv2= self.conv_block(input, self.conv2)
-        conv3= self.conv_block(input, self.conv3)
-
-        all_out = torch.cat((conv1, conv2, conv3), 1)
-        # all_out.size() = (batch_size, num_kernels*out_channels)
-        fc_in = self.dropout(all_out)
-        # fc_in.size()) = (batch_size, num_kernels*out_channels)
-        logits = self.fc(fc_in) #error on this line
-
+        embeds = self.embedding(x)  # tokens to embeddings
+        input = embeds.unsqueeze(1)  # size()= (batch_size, num_seq, embedding length)
+        convs = [F.relu(conv(input)).squeeze(3) for conv in self.convs1]
+        pooled = [F.max_pool1d(i, i.size(2)).squeeze(2) for i in convs]
+        concat = torch.cat(pooled, 1)  # size() = (batch_size, num_kernels*out_channels)
+        dropped = self.dropout(concat)  # size() = (batch_size, num_kernels*out_channels)
+        logits = self.fc1(dropped)
         return logits
+
+
+# ========== CNN- SEQUENTIAL CLASS with Embeddings ============#
+
+class CNN_Seq(nn.Module):
+
+    def __init__(self, num_classes, input_channels, num_filters, filter_sizes, embeds_size, vocab_size,
+                 padding_idx, stride, drop_out):
+        super(CNN_Seq, self).__init__()
+
+        self.embedding = torch.nn.Embedding(vocab_size, embeds_size, padding_idx=padding_idx)
+        self.output_size = num_classes
+        self.input_channels = input_channels
+        self.num_filters = num_filters
+        self.filter_sizes = filter_sizes
+        self.stride = stride
+        self.dropout = drop_out
+        self.embeds_size = embeds_size
+
+        self.cnn1_layers = Sequential(
+            #first conv layer
+            nn.Conv2d(self.input_channels, 100, kernel_size=(5, 5), stride=5, padding=1)
+            nn.ReLU(inplace=True))
+
+        self.maxpool1 = Sequential(
+            nn.MaxPool2d(kernel_size=(2, 1), stride=(2, 1)),
+            nn.Dropout(self.dropout))
+
+        self.cnn2 = Sequential(
+            nn.Conv2d(100, 200, kernel_size=(5, 1), stride=5, padding=1),
+            nn.ReLU(inplace=True))
+
+        self.maxpool2 = Sequential(
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Dropout(self.dropout))
+
+        self.linear_layers = Sequential(nn.Linear(in_features=1000, out_features=200),
+                                        nn.ReLU(inplace=True),
+                                        nn.Dropout(self.dropout),
+                                        nn.Linear(in_features=200, out_features=100),
+                                        nn.ReLU(inplace=True),
+                                        nn.Dropout(self.dropout),
+                                        nn.Linear(in_features=100, out_features=num_classes))
+
+    def forward(self, x):
+        embeds = self.embedding(x)
+        input = embeds.unsqueeze(1)
+        conv1 = self.cnn1_layers(input)
+        maxpool1 = self.maxpool1(conv1)
+        conv2 = self.cnn2(maxpool1)
+        output_convs = self.maxpool2(conv2)
+        adjust = output_convs.view(output_convs.size(0), -1)
+        final_output = self.linear_layers(adjust)
+        return final_output
+
+
 

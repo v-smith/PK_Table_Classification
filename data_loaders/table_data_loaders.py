@@ -161,7 +161,7 @@ def process_table_data(inp_samples: List[Dict], inp_tokenizer: str, max_len: int
     input_hash = [sample["_input_hash"] for sample in inp_samples]
 
     tokenizer = PreTrainedTokenizerFast(tokenizer_file=inp_tokenizer)
-    tokenizer.add_tokens(["[CAPTION]", "[FIRST_ROW]", "[FIRST_COL]", "[TABLE_BODY]"], special_tokens=True)
+    #tokenizer.add_tokens(["[CAPTION]", "[FIRST_ROW]", "[FIRST_COL]", "[TABLE_BODY]"], special_tokens=True)
     tokenizer.add_special_tokens({'pad_token': '[PAD]'})
     table_encodings = tokenizer(prepro_htmls, padding=True, truncation=True, max_length=max_len)
     table_ids_no_pad = extract_all_ids_withoutpad(table_encodings["input_ids"])

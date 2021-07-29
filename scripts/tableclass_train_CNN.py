@@ -1,20 +1,16 @@
 # imports
 from sklearn.metrics import classification_report
 from data_loaders.table_data_loaders import get_dataloaders
-from data_loaders.models import NeuralNet
 import torch
 import torch.nn as nn
 from transformers import PreTrainedTokenizerFast
 import matplotlib
-from tableclass_engine import train, validate, label_wise_metrics, \
+from tableclass_engine import train, validate, \
     plot_loss_graph, plot_f1_graph, f1_nozeros, save_checkpoint
-import numpy as np
 import json
 import os
 from torch.utils.tensorboard import SummaryWriter
 from data_loaders.models import CNN
-
-writer = SummaryWriter("../data/runs/")
 
 # noinspection PyUnresolvedReferences
 matplotlib.style.use('ggplot')
@@ -36,6 +32,8 @@ torch.manual_seed(1)
 with open("../config/config_tableclass_CNN.json") as config:
     cf = json.load(config)
 
+writer = SummaryWriter(log_dir=("../data/runs/" + cf["run_name"]))
+
 # ============ Load and Check Tokenizer =========== #
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 tokenizer = PreTrainedTokenizerFast(tokenizer_file=cf["tokenizer_file"])
@@ -51,8 +49,9 @@ train_dataloader, train_dataset, valid_dataloader, valid_dataset, test_dataloade
     inp_data_dir="../data/train-test-val",
     inp_tokenizer="../tokenizers/tokenizerPKtablesSpecialTokens5000.json",
     max_len=cf["max_len"], batch_size=cf["batch_size"], val_batch_size=cf["val_batch_size"],
-    n_workers=cf["n_workers"], remove_html=cf["remove_html"], baseline_only=cf["baseline_only"], aug_all=False, aug_nums=True, aug_syns=False,
-    sampler=True)
+    n_workers=cf["n_workers"], remove_html=cf["remove_html"], baseline_only=cf["baseline_only"],
+    aug_all=cf["aug_all"], aug_nums=cf["aug_nums"], aug_syns=cf["aug_syns"], aug_both=cf["aug_both"],
+    sampler=cf["sampler"], sections=cf["sections_only"])
 
 # ============ Set Device =============== #
 # device config
@@ -62,13 +61,12 @@ device = 'cpu'
 torch.autograd.set_detect_anomaly(True)
 
 # ============ Get Model =============== #
-model = CNN(seq_len=cf["seq_len"], out_channels=cf["out_channels"], input_channels=cf["input_channels"],
-            num_classes=cf["num_classes"], embeds_size=cf["embeds_size"], kernel_heights=cf["kernel_heights"],
-            vocab_size=vocab_size, padding_idx=padding_idx, stride=cf["stride"]).to(device)
+model = CNN(num_filters=cf["num_filters"], input_channels=cf["input_channels"],
+            num_classes=cf["num_classes"], embeds_size=cf["embeds_size"], filter_sizes=cf["filter_sizes"],
+            vocab_size=vocab_size, padding_idx=padding_idx, stride=cf["stride"], drop_out=cf["drop_out"]).to(device)
 
 # ============ Define Loss and Optimiser =============== #
-criterion = nn.BCELoss()  # reduction? weight=weights
-#criterion = nn.BCEWithLogitsLoss(pos_weight=weights, reduce=None)
+criterion = nn.BCELoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=cf["lr"])
 
 # ============ Train and Val Loop  =============== #
@@ -125,9 +123,9 @@ for epoch in range(epochs):
 #make sure that all pending events have been written to disk
 writer.flush()
 #close writer
-#writer.close()
+writer.close()
 
-# ========== Plot Results and Save/ Tensor Board ============#
+# ========== Plot Results ============#
 
 class_report = classification_report(val_labels, val_predictions)
 print("==== FINAL VALIDATION CLASS REPORT ====")
