@@ -118,19 +118,15 @@ def separated_sections(inp_samples: List[str]):
 
 class PKDataset(Dataset):
 
-    def __init__(self, encodings, labels, task_hash, input_hash):
+    def __init__(self, encodings, labels):
         self.encodings = encodings
         self.labels = labels
-        self.task_hash = task_hash
-        self.input_hash = input_hash
 
     # support indexing such that dataset[i] can be used to get i-th sample
     def __getitem__(self, index):
         item = {key: torch.tensor(val[index]) for key, val in self.encodings.items()}
         item["labels"] = torch.tensor(self.labels[index]).type(
             torch.float32)  # torch.DoubleTensor # size [n_samples, n_labels]
-        item["_task_hash"] = self.task_hash[index]
-        item["_input_hash"] = self.input_hash[index]
         return item
 
     def __len__(self):
@@ -138,11 +134,9 @@ class PKDataset(Dataset):
 
 class PKDatasetMutli(Dataset):
 
-    def __init__(self, encodings, labels, task_hash, input_hash, mutli_hot):
+    def __init__(self, encodings, labels, mutli_hot):
         self.encodings = encodings
         self.labels = labels
-        self.task_hash = task_hash
-        self.input_hash = input_hash
         self.multihot = mutli_hot
 
     # support indexing such that dataset[i] can be used to get i-th sample
@@ -151,8 +145,6 @@ class PKDatasetMutli(Dataset):
         item["labels"] = torch.tensor(self.labels[index]).type(
             torch.float32)  # torch.DoubleTensor # size [n_samples, n_labels]
         item["multi_hot"] = torch.tensor(self.multihot[index]).type(torch.float32)
-        item["_task_hash"] = self.task_hash[index]
-        item["_input_hash"] = self.input_hash[index]
         return item
 
     def __len__(self):
@@ -192,9 +184,6 @@ def process_table_data(inp_samples: List[Dict], inp_tokenizer: str, max_len: int
     else:
         labels = convert_labels(inp_labels=labels)
 
-    task_hash = [sample["_task_hash"] for sample in inp_samples]
-    input_hash = [sample["_input_hash"] for sample in inp_samples]
-
     tokenizer = PreTrainedTokenizerFast(tokenizer_file=inp_tokenizer)
     # tokenizer.add_tokens(["[CAPTION]", "[FIRST_ROW]", "[FIRST_COL]", "[TABLE_BODY]"], special_tokens=True)
     tokenizer.add_special_tokens({'pad_token': '[PAD]'})
@@ -207,9 +196,9 @@ def process_table_data(inp_samples: List[Dict], inp_tokenizer: str, max_len: int
     #get mutli-hot vectors:
     if mutli_hot:
         multi_hot_vectors = [get_multi_hot(lst, vocab=tokenizer.vocab) for lst in table_ids_no_pad]
-        torch_dataset = PKDatasetMutli(encodings=table_encodings, mutli_hot=multi_hot_vectors, labels=labels, task_hash=task_hash, input_hash=input_hash)
+        torch_dataset = PKDatasetMutli(encodings=table_encodings, mutli_hot=multi_hot_vectors, labels=labels)
     else:
-        torch_dataset = PKDataset(encodings=table_encodings, labels=labels, task_hash=task_hash, input_hash=input_hash)
+        torch_dataset = PKDataset(encodings=table_encodings, labels=labels)
 
     input_ids = table_encodings["input_ids"]
     check_tokens = [tokenizer.convert_ids_to_tokens(x) for x in input_ids]
@@ -380,12 +369,10 @@ def repl4(match):
 
 
 def augment_nums(inp_samples: List[Dict]):
-    """Agitates numbers by 10% up or down, Please note input and task hashes will need to be reset at the end if this function is used """
+    """Agitates numbers by 10% up or down"""
     augmented_samples = []
     for sample in inp_samples:
         labels = sample["accept"]
-        task_hash = sample["_task_hash"]
-        input_hash = sample["_input_hash"]
         if random.choice([0, 1]) < 0.5:
             aug_html = re.sub(r'[-+]?([0-9]*\.?[0-9]+)(?:[eE][-+]?[0-9]+)?', repl1, sample["html"])
             # html_down_20 = re.sub(r'[-+]?([0-9]*\.?[0-9]+)(?:[eE][-+]?[0-9]+)?', repl4, sample["html"])
@@ -394,15 +381,9 @@ def augment_nums(inp_samples: List[Dict]):
             aug_html = re.sub(r'[-+]?([0-9]*\.?[0-9]+)(?:[eE][-+]?[0-9]+)?', repl2, sample["html"])
 
         augmented_samples.append(
-            {"html": aug_html, "accept": labels, "_task_hash": task_hash, "_input_hash": input_hash})
+            {"html": aug_html, "accept": labels})
 
     return augmented_samples
-
-
-test_sample = [{"html": "2 2 3 6 7 89 2.0 μg/mL μG/mL μg/mL", "accept": [2, 3, 4], "_input_hash": 2, "_task_hash": 4},
-               {"html": "minutes, seconds, h, d and month μg/mL μG/mL μg/mL", "accept": [2, 7, 9], "_input_hash": 5,
-                "_task_hash": 6}]
-augment_nums(test_sample)
 
 
 def get_match_pattern(af):
@@ -449,7 +430,7 @@ def repl_syns(match):
 
 
 def augment_syns(inp_samples: List[Dict], aug_file):
-    """Replaces PK terms and units with synonyms, Please note input and task hashes will need to be reset at the end if this function is used """
+    """Replaces PK terms and units with synonyms """
 
     with open(aug_file) as f:
         af = json.load(f)
@@ -457,36 +438,27 @@ def augment_syns(inp_samples: List[Dict], aug_file):
 
     htmls = [sample["html"] for sample in inp_samples]
     labels = [sample["accept"] for sample in inp_samples]
-    task_hashes = [sample["_task_hash"] for sample in inp_samples]
-    input_hashes = [sample["_input_hash"] for sample in inp_samples]
 
     augmented_htmls = htmls
     for k, v in match_patterns.items():
         augmented_htmls = [re.sub(match_patterns[k], repl_syns, html, flags=re.IGNORECASE) for html in augmented_htmls]
 
     augmented_samples = []
-    for html, label, task, input in zip(augmented_htmls, labels, task_hashes, input_hashes):
-        augmented_samples.append({"html": html, "accept": label, "_task_hash": task, "_input_hash": input})
+    for html, label in zip(augmented_htmls, labels):
+        augmented_samples.append({"html": html, "accept": label})
 
     return augmented_samples
 
 
 def augment_all(inp_samples: List[Dict]):
-    """Agitates numbers by 10% up or down or replaces PK terms with synonyms,
-    Please note input and task hashes will need to be reset at the end if this function is used """
+    """Agitates numbers by 10% up or down or replaces PK terms with synonyms """
     augmented_samples = []
     number_samples = augment_nums(inp_samples)
     combined_samples = augment_syns(number_samples, "../config/data_augment.json")
     augmented_samples.extend(combined_samples)
     return augmented_samples
 
-
-# test_sample = [
-# {"html": " 2 3 4 days auclast and emax african μg/mL μG/mL μg/mL", "accept": [2, 3, 4], "_input_hash": 2, "_task_hash": 4},
-# {"html": "4 7.0 42 minutes, seconds, h, d and month μg/mL μG/mL μg/mL", "accept": [2, 7, 9], "_input_hash": 5,
-# "_task_hash": 6}]
-
-def get_dataloaders(inp_data_dir: str, inp_tokenizer: str, max_len: int,
+def get_dataloaders(train_dataset: str, val_dataset: str, inp_tokenizer: str, max_len: int,
                     batch_size: int, val_batch_size: int, n_workers: int, remove_html: bool, baseline_only: bool,
                     aug_all: bool, aug_nums: bool, aug_syns: bool, aug_both: bool, sampler: bool, sections: bool, multi_hot: bool) -> \
         Iterable[DataLoader]:
@@ -500,9 +472,8 @@ def get_dataloaders(inp_data_dir: str, inp_tokenizer: str, max_len: int,
     @param n_workers: number of workers for the dataloader
     @return: pytorch data loaders
     """
-    train_samples = list(read_dataset(data_dir_inp=inp_data_dir, dataset_name="train-corrected"))
-    valid_samples = list(read_dataset(data_dir_inp=inp_data_dir, dataset_name="val-corrected"))
-    test_samples = list(read_dataset(data_dir_inp=inp_data_dir, dataset_name="test-corrected"))
+    train_samples = train_dataset
+    val_samples = val_dataset
 
     if aug_all:
         augmented_samples = augment_all(train_samples)
@@ -523,12 +494,8 @@ def get_dataloaders(inp_data_dir: str, inp_tokenizer: str, max_len: int,
 
     print(f"Total Length of Train Samples is: {len(train_samples)}")
 
-    train_samples = [{"html": dic["html"], "accept": dic["accept"], "_task_hash": dic["_task_hash"],
-                      "_input_hash": dic["_input_hash"]} for dic in train_samples]
-    valid_samples = [{"html": dic["html"], "accept": dic["accept"], "_task_hash": dic["_task_hash"],
-                      "_input_hash": dic["_input_hash"]} for dic in valid_samples]
-    test_samples = [{"html": dic["html"], "accept": dic["accept"], "_task_hash": dic["_task_hash"],
-                     "_input_hash": dic["_input_hash"]} for dic in test_samples]
+    train_samples = [{"html": lst[0], "accept": lst[1]} for lst in train_samples]
+    val_samples = [{"html": lst[0], "accept": lst[1]} for lst in val_samples]
 
     train_dataloader, train_dataset = make_dataloader(inp_samples=train_samples, batch_size=batch_size,
                                                       inp_tokenizer=inp_tokenizer,
@@ -537,18 +504,11 @@ def get_dataloaders(inp_data_dir: str, inp_tokenizer: str, max_len: int,
                                                       dataset_name='training', remove_html=remove_html,
                                                       baseline_only=baseline_only,
                                                       remove_5s=False, sections=sections, multi_hot=multi_hot)
-    valid_dataloader, valid_dataset = make_dataloader(inp_samples=valid_samples, batch_size=val_batch_size,
-                                                      inp_tokenizer=inp_tokenizer,
-                                                      max_len=max_len, shuffle=False, sampler=False,
-                                                      n_workers=n_workers,
-                                                      dataset_name='dev', remove_html=remove_html,
-                                                      baseline_only=baseline_only,
-                                                      remove_5s=False, sections=sections, multi_hot=multi_hot)
-    test_dataloader, test_dataset = make_dataloader(inp_samples=test_samples, batch_size=val_batch_size,
+    val_dataloader, val_dataset = make_dataloader(inp_samples=val_samples, batch_size=val_batch_size,
                                                     inp_tokenizer=inp_tokenizer,
                                                     max_len=max_len, shuffle=False, sampler=False, n_workers=n_workers,
                                                     dataset_name='test', remove_html=remove_html,
                                                     baseline_only=baseline_only,
-                                                    remove_5s=True, sections=sections, multi_hot=multi_hot)
+                                                    remove_5s=False, sections=sections, multi_hot=multi_hot)
 
-    return train_dataloader, train_dataset, valid_dataloader, valid_dataset, test_dataloader, test_dataset
+    return train_dataloader, train_dataset, val_dataloader, val_dataset

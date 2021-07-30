@@ -1,5 +1,5 @@
 {
-  "run_name": "CNN-Ngram-",
+  "run_name": "CNN-Ngram-MutliHot",
   "tokenizer_file": "../tokenizers/tokenizerPKtablesSpecialTokens5000.json",
   "max_len": 500,
   "num_classes":9,
@@ -21,6 +21,7 @@
   "aug_nums": false,
   "aug_syns": false,
   "aug_both": false,
-  "sampler" : false
+  "sampler" : false,
+  "multi_hot": true
 }
 

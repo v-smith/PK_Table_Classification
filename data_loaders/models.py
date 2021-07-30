@@ -2,25 +2,29 @@ import torch
 from torch import nn
 from torch.nn import functional as F, Sequential
 
+
 # ========== Fully connected neural network with 2 hidden layers and embeddings ============#
 
 class NeuralNet(nn.Module):
-    def __init__(self, num_classes, hidden_size, embeds_size, vocab_size, padding_idx):
+    def __init__(self, num_classes, hidden_size, embeds_size, vocab_size, padding_idx, drop_out):
         super(NeuralNet, self).__init__()
         self.embedding = torch.nn.Embedding(vocab_size, embeds_size, padding_idx=padding_idx)
         self.l1 = nn.Linear(embeds_size, hidden_size)  # or number of classes if only one layer
         self.relu = nn.ReLU()
+        self.dropout = nn.Dropout(drop_out)  # defines proportion of neurons to drop out
         self.l2 = nn.Linear(hidden_size, num_classes)
-        self.dropout = nn.Dropout(0.4)  # define proportion of neurons to drop out
+        #self.l2 = nn.Linear((hidden_size + vocab_size), num_classes)
         # self.double() #if feeding in a Torch.Double type
 
-    def forward(self, x):
+    def forward(self, x):  # mutli
         embeddings = self.embedding(x)
         max_pooled = torch.max(embeddings, dim=1, keepdim=False)[0]
-        out_dropout = self.dropout(max_pooled)
-        out_l1 = self.l1(out_dropout)
+        # out_dropout = self.dropout(max_pooled)
+        out_l1 = self.l1(max_pooled)
         out_relu = self.relu(out_l1)
-        out_l2 = self.l2(out_relu)
+        out_dropout = self.dropout(out_relu)
+        #concat_multi = torch.cat((multi, out_dropout), dim=1)
+        out_l2 = self.l2(out_dropout)
         # no activation and no softmax at the end
         return out_l2
 
@@ -66,19 +70,23 @@ class CNN(nn.Module):
         self.stride = stride  # Number of strides for each convolution, default is 1
 
         # conv layers definition
-        self.convs1 = nn.ModuleList([nn.Conv2d(self.input_channels, self.num_filters, (K, embeds_size), self.stride) for K in self.filter_sizes])
+        self.convs1 = nn.ModuleList(
+            [nn.Conv2d(self.input_channels, self.num_filters, (K, embeds_size), self.stride) for K in
+             self.filter_sizes])
         # self.conv2 = nn.Conv1d(self.input_channels, self.out_channels, (self.kernel_heights[1], embeds_size), self.stride)
         self.dropout = nn.Dropout(drop_out)
-        self.fc1 = nn.Linear(len(filter_sizes) * num_filters, num_classes)
+        self.fc1 = nn.Linear((len(filter_sizes) * num_filters), num_classes)
+        # self.fc1 = nn.Linear((len(filter_sizes) * num_filters) + vocab_size, num_classes)
 
-    def forward(self, x):
+    def forward(self, x): #mutli
         embeds = self.embedding(x)  # tokens to embeddings
         input = embeds.unsqueeze(1)  # size()= (batch_size, num_seq, embedding length)
         convs = [F.relu(conv(input)).squeeze(3) for conv in self.convs1]
         pooled = [F.max_pool1d(i, i.size(2)).squeeze(2) for i in convs]
-        concat = torch.cat(pooled, 1)  # size() = (batch_size, num_kernels*out_channels)
-        dropped = self.dropout(concat)  # size() = (batch_size, num_kernels*out_channels)
-        logits = self.fc1(dropped)
+        concat = torch.cat(pooled, 1)
+        concat = self.dropout(concat)
+        #concat = torch.cat((concat, multi), dim=1)
+        logits = self.fc1(concat)
         return logits
 
 
@@ -100,8 +108,8 @@ class CNN_Seq(nn.Module):
         self.embeds_size = embeds_size
 
         self.cnn1_layers = Sequential(
-            #first conv layer
-            nn.Conv2d(self.input_channels, 100, kernel_size=(5, 5), stride=5, padding=1)
+            # first conv layer
+            nn.Conv2d(self.input_channels, 100, kernel_size=(5, 5), stride=5, padding=1),
             nn.ReLU(inplace=True))
 
         self.maxpool1 = Sequential(
@@ -134,6 +142,3 @@ class CNN_Seq(nn.Module):
         adjust = output_convs.view(output_convs.size(0), -1)
         final_output = self.linear_layers(adjust)
         return final_output
-
-
-
