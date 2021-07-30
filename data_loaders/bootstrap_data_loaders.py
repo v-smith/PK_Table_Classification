@@ -189,7 +189,7 @@ def process_table_data(inp_samples: List[Dict], inp_tokenizer: str, max_len: int
     tokenizer.add_special_tokens({'pad_token': '[PAD]'})
     table_encodings = tokenizer(prepro_htmls, padding=True, truncation=True, max_length=max_len)
     table_ids_no_pad = extract_all_ids_withoutpad(table_encodings["input_ids"])
-    print_token_stats(all_tokens=table_ids_no_pad, dataset_name=dataset_name, plot_histogram=True)
+    #print_token_stats(all_tokens=table_ids_no_pad, dataset_name=dataset_name, plot_histogram=True)
 
     print(f"Number of tables : {len(table_ids_no_pad)}")
 

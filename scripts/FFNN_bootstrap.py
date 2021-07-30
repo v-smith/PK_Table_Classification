@@ -16,6 +16,7 @@ from sklearn.utils import resample
 import matplotlib.pyplot as plt
 import pandas as pd
 from tqdm import tqdm
+import json
 
 
 # noinspection PyUnresolvedReferences
@@ -76,8 +77,8 @@ train_samples = [{"html": dic["html"], "accept": dic["accept"]} for dic in train
 values = pd.DataFrame(train_samples).values
 
 # configure bootstrap
-n_iterations = 1000
-n_size = int(len(train_samples) * 0.70)
+n_iterations = 1
+n_size = int(len(train_samples) * 0.50)
 
 # run bootstrap
 all_stats = []
@@ -167,5 +168,14 @@ lower = max(0.0, numpy.percentile(max_stats, p))
 p = (alpha+((1.0-alpha)/2.0))*100
 upper = min(1.0, numpy.percentile(max_stats, p))
 print('%.1f confidence interval %.1f%% and %.1f%%' % (alpha*100, lower*100, upper*100))
+
+with open("../data/outputs/bootstrap/bootstrap.json") as feedsjson:
+    feeds = json.load(feedsjson)
+    name = str(cf["run_name"]) + str(n_iterations)
+    entry = {name: max_stats, "upper": upper, "lower": lower}
+    feeds.append(entry)
+with open("../data/outputs/bootstrap/bootstrap.json", mode='w') as f:
+    f.write(json.dumps(feeds, indent=2))
+
 
 a=1
