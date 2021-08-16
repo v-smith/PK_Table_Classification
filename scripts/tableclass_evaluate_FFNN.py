@@ -20,14 +20,14 @@ tokenizer = PreTrainedTokenizerFast(tokenizer_file=cf["tokenizer_file"])
 tokenizer.add_special_tokens({'pad_token': '[PAD]'})
 
 # get vocab size and padding index
-vocab_size = tokenizer.vocab_size + len(tokenizer.all_special_tokens) #+ len(tokenizer.get_added_vocab())
+vocab_size = tokenizer.vocab_size + len(tokenizer.all_special_tokens) + len(tokenizer.get_added_vocab())
 padding_idx = tokenizer.pad_token_id
 
 # ============ Get data loaders and datasets =============== #
 
 train_dataloader, train_dataset, valid_dataloader, valid_dataset, test_dataloader, test_dataset = get_dataloaders(
     inp_data_dir="../data/train-test-val",
-    inp_tokenizer="../tokenizers/tokenizerPKtablesSpecialTokens5000.json",
+    inp_tokenizer=cf["tokenizer_file"],
     max_len=cf["max_len"], batch_size=cf["batch_size"], val_batch_size=cf["val_batch_size"],
     n_workers=cf["n_workers"], remove_html=cf["remove_html"], baseline_only=cf["baseline_only"],
     aug_all=cf["aug_all"], aug_nums=cf["aug_nums"], aug_syns=cf["aug_syns"], aug_both= cf["aug_both"], sampler=cf["sampler"],
@@ -48,7 +48,7 @@ model = NeuralNet(num_classes=cf["num_classes"], embeds_size=cf["embeds_size"],
 optimizer = torch.optim.Adam(model.parameters(), lr=cf["lr"])
 
 # load the model checkpoint
-model_checkpoint = torch.load("../data/outputs/model_saves/FFNN-classification-MultiHot-model_best.pth.tar")
+model_checkpoint = torch.load("../data/outputs/model_saves/FFNN-500tokens-html-model_best.pth.tar")
 
 # load model weights state_dict and optimizer state dict
 model.load_state_dict(model_checkpoint['state_dict'])
@@ -62,9 +62,9 @@ with torch.no_grad():
     all_preds = []
     all_labs = []
     for i, batch in enumerate(test_dataloader):
-        input_ids, multi_hot, target = batch['input_ids'].to(device), batch["multi_hot"].to(device), batch['labels']
+        input_ids, target = batch['input_ids'].to(device), batch['labels'] #multi_hot, #batch["multi_hot"].to(device),
 
-        outputs = model(input_ids, multi_hot)
+        outputs = model(input_ids) #multi_hot
         outputs = torch.sigmoid(outputs).detach().cpu()
         predicted = torch.round(outputs)
 

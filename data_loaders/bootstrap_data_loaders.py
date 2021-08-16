@@ -55,6 +55,8 @@ def preprocess_htmls(inp_samples: List[str], remove_html=bool):
             final_html = re.sub(r"\<(?:[^<>])*\>", ' ', replace_style)
         else:
             final_html = re.sub(r'''\<table xmlns:(.*?)rules="groups"\>''', '<table>', replace_style)
+
+        final_html = re.sub(' +', ' ', final_html)
         processed_htmls.append(final_html)
 
     return processed_htmls
@@ -132,6 +134,7 @@ class PKDataset(Dataset):
     def __len__(self):
         return len(self.labels)
 
+
 class PKDatasetMutli(Dataset):
 
     def __init__(self, encodings, labels, mutli_hot):
@@ -163,7 +166,8 @@ def get_multi_hot(lst, vocab):
 
 def process_table_data(inp_samples: List[Dict], inp_tokenizer: str, max_len: int,
                        dataset_name: str, remove_html: bool, baseline_only: bool, remove_5s: bool,
-                       sections: bool, mutli_hot: bool) -> PKDataset:
+                       sections: bool, mutli_hot: bool, aug_all: bool, aug_syns: bool, aug_nums: bool,
+                       aug_both: bool) -> PKDataset:
     """
     Generates a pytorch dataset containing encoded tokens and labels
     """
@@ -178,6 +182,24 @@ def process_table_data(inp_samples: List[Dict], inp_tokenizer: str, max_len: int
     else:
         prepro_htmls = preprocess_htmls(inp_samples=htmls, remove_html=remove_html)
 
+    # augmentation
+    if aug_syns:
+        augmented_syns = augment_syns(prepro_htmls, "../config/data_augment.json")
+        prepro_htmls.extend(augmented_syns)
+    elif aug_nums:
+        augmented_nums = augment_nums(prepro_htmls)
+        prepro_htmls.extend(augmented_nums)
+    elif aug_all:
+        augmented_all = augment_all(prepro_htmls)
+        prepro_htmls.extend(augmented_all)
+    elif aug_both:
+        nums = augment_nums(prepro_htmls)
+        syns = augment_syns(prepro_htmls, "../config/data_augment.json")
+        prepro_htmls.extend(nums)
+        prepro_htmls.extend(syns)
+    else:
+        prepro_htmls = prepro_htmls
+
     labels = [sample["accept"] for sample in inp_samples]
     if remove_5s:
         labels = convert_labels_5s(inp_labels=labels)
@@ -189,11 +211,11 @@ def process_table_data(inp_samples: List[Dict], inp_tokenizer: str, max_len: int
     tokenizer.add_special_tokens({'pad_token': '[PAD]'})
     table_encodings = tokenizer(prepro_htmls, padding=True, truncation=True, max_length=max_len)
     table_ids_no_pad = extract_all_ids_withoutpad(table_encodings["input_ids"])
-    #print_token_stats(all_tokens=table_ids_no_pad, dataset_name=dataset_name, plot_histogram=True)
+    # print_token_stats(all_tokens=table_ids_no_pad, dataset_name=dataset_name, plot_histogram=True)
 
     print(f"Number of tables : {len(table_ids_no_pad)}")
 
-    #get mutli-hot vectors:
+    # get mutli-hot vectors:
     if mutli_hot:
         multi_hot_vectors = [get_multi_hot(lst, vocab=tokenizer.vocab) for lst in table_ids_no_pad]
         torch_dataset = PKDatasetMutli(encodings=table_encodings, mutli_hot=multi_hot_vectors, labels=labels)
@@ -211,11 +233,12 @@ def process_table_data(inp_samples: List[Dict], inp_tokenizer: str, max_len: int
 
 def make_dataloader(inp_samples: List[Dict], batch_size: int, inp_tokenizer: str, max_len: int,
                     shuffle: bool, sampler: bool, n_workers: int, dataset_name: str, remove_html: bool,
-                    baseline_only: bool,
-                    remove_5s: bool, sections: bool, multi_hot: bool) -> [DataLoader, PKDataset]:
+                    baseline_only: bool, remove_5s: bool, sections: bool, multi_hot: bool,
+                    aug_all: bool, aug_syns: bool, aug_nums: bool, aug_both: bool) -> [DataLoader, PKDataset]:
     torch_dataset = process_table_data(inp_samples=inp_samples, inp_tokenizer=inp_tokenizer, max_len=max_len,
                                        dataset_name=dataset_name, remove_html=remove_html, baseline_only=baseline_only,
-                                       remove_5s=remove_5s, sections=sections, mutli_hot=multi_hot)
+                                       remove_5s=remove_5s, sections=sections, mutli_hot=multi_hot,
+                                       aug_all=aug_all, aug_syns=aug_syns, aug_nums=aug_nums, aug_both=aug_both)
 
     if sampler:
         train_idx = list(range(len(torch_dataset)))
@@ -229,6 +252,179 @@ def make_dataloader(inp_samples: List[Dict], batch_size: int, inp_tokenizer: str
         loader = DataLoader(torch_dataset, batch_size=batch_size, num_workers=n_workers)
 
     return loader, torch_dataset
+
+
+def read_jsonl(file_path):
+    # Taken from prodigy support
+    """Read a .jsonl file and yield its contents line by line.
+    file_path (unicode / Path): The file path.
+    YIELDS: The loaded JSON contents of each line.
+    """
+    with Path(file_path).open(encoding='utf8') as f:
+        for line in f:
+            try:  # hack to handle broken jsonl
+                yield ujson.loads(line.strip())
+            except ValueError:
+                continue
+
+
+def read_dataset(data_dir_inp: str, dataset_name: str):
+    file_name = f"{dataset_name}.jsonl"
+    file_path = os.path.join(data_dir_inp, file_name)
+    json_list = read_jsonl(file_path=file_path)
+    return json_list
+
+
+def repl1(match):
+    matched = match.group(0)
+    if '.' or 'e' in matched.lower():
+        num = round(float(matched) * 0.9, 1)
+    else:
+        num = int(matched) + 1
+    return str(num)
+
+
+def repl2(match):
+    matched = match.group(0)
+    if '.' or 'e' in matched.lower():
+        num = round(float(matched) * 1.1, 1)
+    else:
+        num = int(matched) - 1
+    return str(num)
+
+
+def augment_nums(inp_samples: List[str]):
+    """Agitates numbers by 10% up or down"""
+    augmented_samples = []
+    for sample in inp_samples:
+        if random.choice([0, 1]) < 0.5:
+            aug_html = re.sub(r'[-+]?([0-9]*\.?[0-9]+)(?:[eE][-+]?[0-9]+)?', repl1, sample)
+        else:
+            aug_html = re.sub(r'[-+]?([0-9]*\.?[0-9]+)(?:[eE][-+]?[0-9]+)?', repl2, sample)
+
+        augmented_samples.append(aug_html)
+    return augmented_samples
+
+
+def get_match_pattern(af):
+    all_matches = {}
+    for dic in af:
+        match_patterns = {}
+        for subdic in af[dic]:
+            match_lst = af[dic][subdic]
+            match_lst.insert(0, "abuffer")
+            match_lst.append("zbuffer")
+            match_lst = [x.lower() for x in match_lst]
+            match_pattern = " | ".join(sorted(re.escape(x) for x in match_lst))
+            match_patterns[subdic] = match_pattern
+            all_matches.update(match_patterns)
+    return all_matches
+
+
+def grab_children(af):
+    dict_list = []
+    local_list = []
+    for key, value in af.items():
+        dict_list.append(value)
+    for item in dict_list:
+        for k, v in item.items():
+            local_list.append(v)
+    return local_list
+
+
+def repl_syns(match):
+    matched = str(match.group(0)).lower().strip()
+
+    with open("../config/data_augment.json") as f:
+        af = json.load(f)
+
+    # list of replacement lists
+    match_lsts = grab_children(af)
+    match_lsts = [[x.lower().strip() for x in lst] for lst in match_lsts]
+    match_lst = [lst for lst in match_lsts if matched in lst]
+    match_lst = [item for sublist in match_lst for item in sublist]
+    if matched in match_lst:
+        replace_lst = [n for n in match_lst if n != matched]
+        value = random.choice(replace_lst)
+    else:
+        print("error")
+        value = matched
+    value = value.center((len(value) + 2))
+    return str(value)
+
+
+def augment_syns(inp_samples: List[str], aug_file):
+    """Replaces PK terms and units with synonyms """
+
+    with open(aug_file) as f:
+        af = json.load(f)
+    match_patterns = get_match_pattern(af)
+
+    # htmls = [sample["html"] for sample in inp_samples]
+    # labels = [sample["accept"] for sample in inp_samples]
+
+    augmented_htmls = inp_samples
+    for k, v in match_patterns.items():
+        augmented_htmls = [re.sub(match_patterns[k], repl_syns, html, flags=re.IGNORECASE) for html in augmented_htmls]
+
+    # augmented_samples = []
+    # for html, label in zip(augmented_htmls, labels):
+    # augmented_samples.append({"html": html, "accept": label})
+
+    return augmented_htmls
+
+
+def augment_all(inp_samples: List[str]):
+    """Agitates numbers by 10% up or down or replaces PK terms with synonyms """
+    syn_samples = augment_syns(inp_samples, "../config/data_augment.json")
+    combined_samples = augment_nums(syn_samples)
+    return combined_samples
+
+
+def get_dataloaders(train_dataset: str, val_dataset: str, inp_tokenizer: str, max_len: int,
+                    batch_size: int, val_batch_size: int, n_workers: int, remove_html: bool, baseline_only: bool,
+                    aug_all: bool, aug_nums: bool, aug_syns: bool, aug_both: bool, sampler: bool, sections: bool,
+                    multi_hot: bool) -> \
+        Iterable[DataLoader]:
+    """
+    Function to generate data loaders
+    @param inp_data_dir: Input data directory expecting 3 files: train.jsonl and valid.jsonl and test.jsonl
+    @param inp_tokenizer: Pre-trained Tokenizer from file
+    @param max_len: maximum length of token list
+    @param batch_size: batch size
+    @param val_batch_size: batch size for the validation/test datasets
+    @param n_workers: number of workers for the dataloader
+    @return: pytorch data loaders
+    """
+    train_samples = [{"html": x[0], "accept": x[1]} for x in train_dataset]
+    val_samples = [{"html": x[0], "accept": x[1]} for x in val_dataset]
+
+    '''
+    if aug_nums:
+        augmented_samples = augment_nums(train_samples)
+        train_samples.extend(augmented_samples)
+    '''
+    print(f"Total Length of Train Samples is: {len(train_samples)}")
+
+
+    train_dataloader, train_dataset = make_dataloader(inp_samples=train_samples, batch_size=batch_size,
+                                                      inp_tokenizer=inp_tokenizer,
+                                                      max_len=max_len, shuffle=True, sampler=sampler,
+                                                      n_workers=n_workers,
+                                                      dataset_name='training', remove_html=remove_html,
+                                                      baseline_only=baseline_only,
+                                                      remove_5s=False, sections=sections, multi_hot=multi_hot,
+                                                      aug_all=aug_all, aug_syns=aug_syns, aug_nums=aug_nums,
+                                                      aug_both=aug_both)
+    val_dataloader, val_dataset = make_dataloader(inp_samples=val_samples, batch_size=val_batch_size,
+                                                  inp_tokenizer=inp_tokenizer,
+                                                  max_len=max_len, shuffle=False, sampler=False, n_workers=n_workers,
+                                                  dataset_name='test', remove_html=remove_html,
+                                                  baseline_only=baseline_only,
+                                                  remove_5s=False, sections=sections, multi_hot=multi_hot,
+                                                  aug_all=False, aug_syns=False, aug_nums=False, aug_both=False)
+
+    return train_dataloader, train_dataset, val_dataloader, val_dataset
 
 
 class MultilabelBalancedRandomSampler(Sampler):
@@ -315,200 +511,3 @@ class MultilabelBalancedRandomSampler(Sampler):
 
     def __len__(self):
         return len(self.indices)
-
-
-def read_jsonl(file_path):
-    # Taken from prodigy support
-    """Read a .jsonl file and yield its contents line by line.
-    file_path (unicode / Path): The file path.
-    YIELDS: The loaded JSON contents of each line.
-    """
-    with Path(file_path).open(encoding='utf8') as f:
-        for line in f:
-            try:  # hack to handle broken jsonl
-                yield ujson.loads(line.strip())
-            except ValueError:
-                continue
-
-
-def read_dataset(data_dir_inp: str, dataset_name: str):
-    file_name = f"{dataset_name}.jsonl"
-    file_path = os.path.join(data_dir_inp, file_name)
-    json_list = read_jsonl(file_path=file_path)
-    return json_list
-
-
-def repl1(match):
-    matched = match.group(0)
-    if '.' or 'e' in matched.lower():
-        num = round(float(matched) * 0.9, 1)
-    else:
-        num = int(matched) + 1
-    return str(num)
-
-
-def repl2(match):
-    matched = match.group(0)
-    if '.' or 'e' in matched.lower():
-        num = round(float(matched) * 1.1, 1)
-    else:
-        num = int(matched) - 1
-    return str(num)
-
-
-def repl3(match):
-    matched = match.group(0)
-    num = round(float(matched) * 1.2, 1)
-    return str(num)
-
-
-def repl4(match):
-    matched = match.group(0)
-    num = round(float(matched) * 0.8, 1)
-    return str(num)
-
-
-def augment_nums(inp_samples: List[Dict]):
-    """Agitates numbers by 10% up or down"""
-    augmented_samples = []
-    for sample in inp_samples:
-        labels = sample["accept"]
-        if random.choice([0, 1]) < 0.5:
-            aug_html = re.sub(r'[-+]?([0-9]*\.?[0-9]+)(?:[eE][-+]?[0-9]+)?', repl1, sample["html"])
-            # html_down_20 = re.sub(r'[-+]?([0-9]*\.?[0-9]+)(?:[eE][-+]?[0-9]+)?', repl4, sample["html"])
-            # html_up_20 = re.sub(r'[-+]?([0-9]*\.?[0-9]+)(?:[eE][-+]?[0-9]+)?', repl3, sample["html"])
-        else:
-            aug_html = re.sub(r'[-+]?([0-9]*\.?[0-9]+)(?:[eE][-+]?[0-9]+)?', repl2, sample["html"])
-
-        augmented_samples.append(
-            {"html": aug_html, "accept": labels})
-
-    return augmented_samples
-
-
-def get_match_pattern(af):
-    all_matches = {}
-    for dic in af:
-        match_patterns = {}
-        for subdic in af[dic]:
-            match_lst = af[dic][subdic]
-            match_lst = [x.lower() for x in match_lst]
-            match_pattern = " |".join(sorted(re.escape(x) for x in match_lst))
-            match_patterns[subdic] = match_pattern
-            all_matches.update(match_patterns)
-    return all_matches
-
-
-def grab_children(af):
-    dict_list = []
-    local_list = []
-    for key, value in af.items():
-        dict_list.append(value)
-    for item in dict_list:
-        for k, v in item.items():
-            local_list.append(v)
-    return local_list
-
-
-def repl_syns(match):
-    matched = str(match.group(0)).lower().strip()
-
-    with open("../config/data_augment.json") as f:
-        af = json.load(f)
-
-    # list of replacement lists
-    match_lsts = grab_children(af)
-    match_lsts = [[x.lower().strip() for x in lst] for lst in match_lsts]
-    match_lst = [lst for lst in match_lsts if matched in lst][0]
-    if matched in match_lst:
-        replace_lst = [n for n in match_lst if n != matched]
-        value = random.choice(replace_lst)
-    else:
-        print("error")
-    value = value.center((len(value) + 2))
-    return str(value)
-
-
-def augment_syns(inp_samples: List[Dict], aug_file):
-    """Replaces PK terms and units with synonyms """
-
-    with open(aug_file) as f:
-        af = json.load(f)
-    match_patterns = get_match_pattern(af)
-
-    htmls = [sample["html"] for sample in inp_samples]
-    labels = [sample["accept"] for sample in inp_samples]
-
-    augmented_htmls = htmls
-    for k, v in match_patterns.items():
-        augmented_htmls = [re.sub(match_patterns[k], repl_syns, html, flags=re.IGNORECASE) for html in augmented_htmls]
-
-    augmented_samples = []
-    for html, label in zip(augmented_htmls, labels):
-        augmented_samples.append({"html": html, "accept": label})
-
-    return augmented_samples
-
-
-def augment_all(inp_samples: List[Dict]):
-    """Agitates numbers by 10% up or down or replaces PK terms with synonyms """
-    augmented_samples = []
-    number_samples = augment_nums(inp_samples)
-    combined_samples = augment_syns(number_samples, "../config/data_augment.json")
-    augmented_samples.extend(combined_samples)
-    return augmented_samples
-
-def get_dataloaders(train_dataset: str, val_dataset: str, inp_tokenizer: str, max_len: int,
-                    batch_size: int, val_batch_size: int, n_workers: int, remove_html: bool, baseline_only: bool,
-                    aug_all: bool, aug_nums: bool, aug_syns: bool, aug_both: bool, sampler: bool, sections: bool, multi_hot: bool) -> \
-        Iterable[DataLoader]:
-    """
-    Function to generate data loaders
-    @param inp_data_dir: Input data directory expecting 3 files: train.jsonl and valid.jsonl and test.jsonl
-    @param inp_tokenizer: Pre-trained Tokenizer from file
-    @param max_len: maximum length of token list
-    @param batch_size: batch size
-    @param val_batch_size: batch size for the validation/test datasets
-    @param n_workers: number of workers for the dataloader
-    @return: pytorch data loaders
-    """
-    train_samples = train_dataset
-    val_samples = val_dataset
-
-    if aug_all:
-        augmented_samples = augment_all(train_samples)
-        train_samples.extend(augmented_samples)
-    elif aug_nums:
-        augmented_samples = augment_nums(train_samples)
-        train_samples.extend(augmented_samples)
-    elif aug_syns:
-        augmented_samples = augment_syns(train_samples, "../config/data_augment.json")
-        train_samples.extend(augmented_samples)
-    elif aug_both:
-        syns_samples = augment_syns(train_samples, "../config/data_augment.json")
-        nums_samples = augment_nums(train_samples)
-        train_samples.extend(syns_samples)
-        train_samples.extend(nums_samples)
-    else:
-        train_samples = train_samples
-
-    print(f"Total Length of Train Samples is: {len(train_samples)}")
-
-    train_samples = [{"html": lst[0], "accept": lst[1]} for lst in train_samples]
-    val_samples = [{"html": lst[0], "accept": lst[1]} for lst in val_samples]
-
-    train_dataloader, train_dataset = make_dataloader(inp_samples=train_samples, batch_size=batch_size,
-                                                      inp_tokenizer=inp_tokenizer,
-                                                      max_len=max_len, shuffle=True, sampler=sampler,
-                                                      n_workers=n_workers,
-                                                      dataset_name='training', remove_html=remove_html,
-                                                      baseline_only=baseline_only,
-                                                      remove_5s=False, sections=sections, multi_hot=multi_hot)
-    val_dataloader, val_dataset = make_dataloader(inp_samples=val_samples, batch_size=val_batch_size,
-                                                    inp_tokenizer=inp_tokenizer,
-                                                    max_len=max_len, shuffle=False, sampler=False, n_workers=n_workers,
-                                                    dataset_name='test', remove_html=remove_html,
-                                                    baseline_only=baseline_only,
-                                                    remove_5s=False, sections=sections, multi_hot=multi_hot)
-
-    return train_dataloader, train_dataset, val_dataloader, val_dataset

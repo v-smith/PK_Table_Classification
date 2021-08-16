@@ -29,16 +29,16 @@ def train(model, dataloader, optimizer, criterion, train_data, device):
 
         input_ids = mini_batch['input_ids'].to(device)
         target = mini_batch['labels'].to(device)
-        #multi_hots = mini_batch["multi_hot"].to(device)
+        # multi_hots = mini_batch["multi_hot"].to(device)
 
         optimizer.zero_grad()  # empties from memory
         logits = model(input_ids)
-        #logits = model(input_ids, multi_hots)
+        # logits = model(input_ids, multi_hots)
         # apply sigmoid activation to get all the outputs between 0 and 1
         outputs = torch.sigmoid(logits)
         loss = criterion(outputs, target)
         # backpropagation
-        #loss.backward() #changed this
+        # loss.backward() #changed this
         loss.backward()
         # update optimizer parameters
         optimizer.step()  # updating weights
@@ -53,7 +53,7 @@ def train(model, dataloader, optimizer, criterion, train_data, device):
         running_loss += loss.item()
 
     final_loss = running_loss / counter
-    all_labels = np.stack(all_labels, axis=0)  # check these!!
+    all_labels = np.stack(all_labels, axis=0)
     all_predictions = np.stack(all_predictions, axis=0)
     return all_labels, all_predictions, final_loss
 
@@ -71,11 +71,11 @@ def validate(model, dataloader, criterion, val_data, device):
             counter += 1
             input_ids = mini_batch['input_ids'].to(device)
             target = mini_batch['labels'].to(device)
-            #multi_hots = mini_batch["multi_hot"].to(device)
+            # multi_hots = mini_batch["multi_hot"].to(device)
             # weight_rebal = torch.ones_like(target) / 95.0 + (1.0 - 1.0 / 95.0) * target
 
             logits = model(input_ids)
-            #logits = model(input_ids, multi_hots)
+            # logits = model(input_ids, multi_hots)
             # apply sigmoid activation to get all the outputs between 0 and 1
             outputs = torch.sigmoid(logits)
             loss = criterion(outputs, target)
@@ -139,11 +139,11 @@ def f1_nozeros(class_report_dict: Dict) -> Tuple[float, float]:
         support=v["support"]) for key, v in class_report_dict.items() if
         key in set(acceptable_keys) and v["support"] != 0]
 
-    #if remove_nonrel:
-        #non_zero_support_f1s = [x for x in non_zero_support_f1s if x["class_name"] != "4"]
+    # if remove_nonrel:
+    # non_zero_support_f1s = [x for x in non_zero_support_f1s if x["class_name"] != "4"]
 
-    #if only_notrel:
-        #non_zero_support_f1s = [x for x in non_zero_support_f1s if x["class_name"] == "4"]
+    # if only_notrel:
+    # non_zero_support_f1s = [x for x in non_zero_support_f1s if x["class_name"] == "4"]
 
     macrof1 = 0.
     weighted_f1 = 0.
@@ -208,3 +208,23 @@ def plot_f1_graph(train_f1, valid_f1, cf, variation: str):
     plt.savefig(('../data/outputs/model_plots/f1-' + variation + cf["run_name"] + '.png'))
     plt.show()
 
+def plot_SA_graph(hyperparameters, scores):
+    plt.figure(figsize=(10, 7))
+    for num in range(len(hyperparameters)):
+        plt.plot(scores[num], label=str(hyperparameters[num]))
+    plt.legend()
+    plt.title("Hyperparameter Comparison")
+    plt.xlabel('Epochs')
+    plt.ylabel('Weighted F1 Score')
+    # plt.savefig(('../data/outputs/model_plots/loss-' + cf["run_name"] + '.png'))
+    plt.show()
+
+def plot_val_curve(hyperparameters, best_scores):
+    plt.figure(figsize=(10, 7))
+    plt.plot(hyperparameters, best_scores)
+    plt.legend()
+    plt.title("Validation Curve")
+    plt.xlabel('lrs')
+    plt.ylabel('Weighted F1 Score')
+    # plt.savefig(('../data/outputs/model_plots/loss-' + cf["run_name"] + '.png'))
+    plt.show()

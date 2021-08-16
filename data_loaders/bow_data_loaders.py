@@ -55,6 +55,8 @@ def preprocess_htmls(inp_samples: List[str], remove_html=bool):
             final_html = re.sub(r"\<(?:[^<>])*\>", ' ', replace_style)
         else:
             final_html = re.sub(r'''\<table xmlns:(.*?)rules="groups"\>''', '<table>', replace_style)
+
+        final_html = re.sub(' +', ' ', final_html)
         processed_htmls.append(final_html)
 
     return processed_htmls

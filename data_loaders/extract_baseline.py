@@ -61,11 +61,8 @@ def findall_rownames(table):
 
 def join_info(title, column_names, row_names):
     final_list = []
-    final_list.append("[CAPTION]")
     final_list.extend(title)
-    final_list.append("[FIRST_ROW]")
     final_list.extend(column_names)
-    final_list.append("[FIRST_COL]")
     final_list.extend(row_names)
     final_str = ' '.join(final_list)
     return final_str
