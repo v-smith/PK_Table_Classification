@@ -11,9 +11,8 @@ import matplotlib
 from torch.utils.tensorboard import SummaryWriter
 from typing import Dict, List, Iterable, Tuple
 
-writer = SummaryWriter("../data/runs/")
-matplotlib.style.use('ggplot')
-
+#writer = SummaryWriter("../data/runs/")
+matplotlib.style.use('seaborn-whitegrid')
 
 # training function
 def train(model, dataloader, optimizer, criterion, train_data, device):
@@ -29,11 +28,11 @@ def train(model, dataloader, optimizer, criterion, train_data, device):
 
         input_ids = mini_batch['input_ids'].to(device)
         target = mini_batch['labels'].to(device)
-        # multi_hots = mini_batch["multi_hot"].to(device)
+        multi_hots = mini_batch["multi_hot"].to(device)
 
         optimizer.zero_grad()  # empties from memory
-        logits = model(input_ids)
-        # logits = model(input_ids, multi_hots)
+        #logits = model(input_ids)
+        logits = model(input_ids, multi_hots)
         # apply sigmoid activation to get all the outputs between 0 and 1
         outputs = torch.sigmoid(logits)
         loss = criterion(outputs, target)
@@ -71,11 +70,11 @@ def validate(model, dataloader, criterion, val_data, device):
             counter += 1
             input_ids = mini_batch['input_ids'].to(device)
             target = mini_batch['labels'].to(device)
-            # multi_hots = mini_batch["multi_hot"].to(device)
+            multi_hots = mini_batch["multi_hot"].to(device)
             # weight_rebal = torch.ones_like(target) / 95.0 + (1.0 - 1.0 / 95.0) * target
 
-            logits = model(input_ids)
-            # logits = model(input_ids, multi_hots)
+            #logits = model(input_ids)
+            logits = model(input_ids, multi_hots)
             # apply sigmoid activation to get all the outputs between 0 and 1
             outputs = torch.sigmoid(logits)
             loss = criterion(outputs, target)
@@ -208,23 +207,27 @@ def plot_f1_graph(train_f1, valid_f1, cf, variation: str):
     plt.savefig(('../data/outputs/model_plots/f1-' + variation + cf["run_name"] + '.png'))
     plt.show()
 
-def plot_SA_graph(hyperparameters, scores):
+def plot_SA_graph(hyperparameters, hyperparm_name, train_scores, val_scores):
     plt.figure(figsize=(10, 7))
-    for num in range(len(hyperparameters)):
-        plt.plot(scores[num], label=str(hyperparameters[num]))
-    plt.legend()
-    plt.title("Hyperparameter Comparison")
-    plt.xlabel('Epochs')
+    plt.plot(train_scores, hyperparameters, label="Training Score")
+    plt.plot(val_scores, hyperparameters, label="Cross Validation Score")
+    plt.xlabel(hyperparm_name)
     plt.ylabel('Weighted F1 Score')
-    # plt.savefig(('../data/outputs/model_plots/loss-' + cf["run_name"] + '.png'))
+    plt.tight_layout()
     plt.show()
 
-def plot_val_curve(hyperparameters, best_scores):
+def plot_val_curve(hyperparameters, hyperparm_name, train_scores, train_scores_std, val_scores, val_scores_std):
     plt.figure(figsize=(10, 7))
-    plt.plot(hyperparameters, best_scores)
-    plt.legend()
-    plt.title("Validation Curve")
-    plt.xlabel('lrs')
+    plt.plot(hyperparameters, train_scores, label="Training Score", color="darkorange", lw=2)
+    plt.fill_between(hyperparameters, train_scores - train_scores_std,
+                     train_scores + train_scores_std, alpha=0.2,
+                     color="darkorange", lw=2)
+    plt.plot(hyperparameters, val_scores, label="Cross Validation Score", color="navy", lw=2)
+    plt.fill_between(hyperparameters, val_scores - val_scores_std,
+                     val_scores + val_scores_std, alpha=0.2,
+                     color="navy", lw=2)
+    plt.legend(loc="best")
+    plt.xlabel(hyperparm_name)
     plt.ylabel('Weighted F1 Score')
-    # plt.savefig(('../data/outputs/model_plots/loss-' + cf["run_name"] + '.png'))
+    plt.tight_layout()
     plt.show()

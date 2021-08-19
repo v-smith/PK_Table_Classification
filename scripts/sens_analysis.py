@@ -22,7 +22,7 @@ def plot_bootstrap_hist(class_stats: Dict):
     plt.show()
 
 
-current_run = [x for x in bs if x["name"] == "CNN-NGRAM-Bootstrap-AugAll-100"]
+current_run = [x for x in bs if x["name"] == 'CNN-Bootstrap-RESAMPLE-100']
 per_class_stats = current_run[0]["per_class_stats_ready"]
 
 under_100s = []
@@ -59,6 +59,12 @@ def print_stats(per_class_stats):
 for x in per_class_stats:
     plot_bootstrap_hist(x)
 
+
+median= current_run[0]["median"]
+print(f"median: {median} ")
 print_stats(per_class_stats)
-box_plot(under_100s, over_100s)
+#box_plot(under_100s, over_100s)
+
+names= [x["name"] for x in bs]
+print(names)
 a = 1

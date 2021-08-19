@@ -13,9 +13,9 @@ class NeuralNet(nn.Module):
         self.l1 = nn.Linear(embeds_size, hidden_size)  # or number of classes if only one layer
         self.relu = nn.ReLU()
         self.dropout = nn.Dropout(drop_out)  # defines proportion of neurons to drop out
-        self.l2 = nn.Linear(hidden_size, num_classes)
+        self.l2 = nn.Linear((hidden_size + vocab_size), num_classes)
 
-    def forward(self, x):  # mutli
+    def forward(self, x, multi):  # multi
         embeddings = self.embedding(x)
         #unbound_rows = [torch.unbind(row) for row in embeddings]
         #concat = [torch.cat(row) for row in unbound_rows]
@@ -26,8 +26,8 @@ class NeuralNet(nn.Module):
         #out_l1 = self.l1(stacked)
         out_relu = self.relu(out_l1)
         out_dropout = self.dropout(out_relu)
-        #concat_multi = torch.cat((multi, out_dropout), dim=1)
-        out_l2 = self.l2(out_dropout)
+        concat_multi = torch.cat((multi, out_dropout), dim=1)
+        out_l2 = self.l2(concat_multi) #out_dropout
         return out_l2
 
 
@@ -77,17 +77,17 @@ class CNN(nn.Module):
              self.filter_sizes])
         # self.conv2 = nn.Conv1d(self.input_channels, self.out_channels, (self.kernel_heights[1], embeds_size), self.stride)
         self.dropout = nn.Dropout(drop_out)
-        self.fc1 = nn.Linear((len(filter_sizes) * num_filters), num_classes)
-        # self.fc1 = nn.Linear((len(filter_sizes) * num_filters) + vocab_size, num_classes)
+        #self.fc1 = nn.Linear((len(filter_sizes) * num_filters), num_classes)
+        self.fc1 = nn.Linear((len(filter_sizes) * num_filters) + vocab_size, num_classes)
 
-    def forward(self, x): #mutli
-        embeds = self.embedding(x)  # tokens to embeddings
-        input = embeds.unsqueeze(1)  # size()= (batch_size, num_seq, embedding length)
+    def forward(self, x, multi): #multi
+        embeds = self.embedding(x)
+        input = embeds.unsqueeze(1)
         convs = [F.relu(conv(input)).squeeze(3) for conv in self.convs1]
         pooled = [F.max_pool1d(i, i.size(2)).squeeze(2) for i in convs]
         concat = torch.cat(pooled, 1)
         concat = self.dropout(concat)
-        #concat = torch.cat((concat, multi), dim=1)
+        concat = torch.cat((concat, multi), dim=1)
         logits = self.fc1(concat)
         return logits
 

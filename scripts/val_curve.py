@@ -13,8 +13,8 @@ import json
 import os
 
 
-lrs = [0.001, 0.005, 0.01, 0.1]
-batch_size = [16, 32, 64]
+lrs = [0.001, 0.01, 0.1]
+batch_size = [16, 32, 64, 128]
 embeds_size = [10, 50, 100]
 drop_out = np.arange(0.1, 0.55, 0.05)
 hidden_size = [250, 100, 50]
@@ -64,8 +64,10 @@ device = 'cpu'
 
 
 # ============ Define Loss and Optimiser =============== #
-all_stats = []
+all_stats_val = []
+all_stats_train = []
 all_class_reports = []
+
 for lr in lrs:
     model = NeuralNet(num_classes=cf["num_classes"], embeds_size=cf["embeds_size"],
                       vocab_size=vocab_size, padding_idx=padding_idx, hidden_size=cf["hidden_size"],
@@ -108,14 +110,28 @@ for lr in lrs:
         all_train_f1_macro.append(train_f1_positives_macro)
         all_val_f1_macro.append(val_f1_positives_macro)
 
-    all_stats.append(all_val_f1_weighted)
+    all_stats_train.append(all_train_f1_weighted)
+    all_stats_val.append(all_val_f1_weighted)
     all_class_reports.append(val_class_report)
 
 
 # ========== Plot Results ============#
 plot_SA_graph(lrs, all_stats)
 
-max_stats = [max(lst) for lst in all_stats]
+max_stats_train= [max(lst) for lst in all_stats_train]
+max_stats_val = [max(lst) for lst in all_stats_val]
 plot_val_curve(lrs, max_stats)
+
+a=1
+
+# save to file
+with open("../data/outputs/val_curve/val_curve.json") as feedsjson:
+    feeds = json.load(feedsjson)
+    name = str(cf["run_name"], )
+    entry = {"name": name}
+    feeds.append(entry)
+with open("../data/outputs/val_curve/val_curve.json", mode='w') as f:
+    f.write(json.dumps(feeds, indent=2))
+
 
 a=1

@@ -13,8 +13,6 @@ import json
 import os
 from torch.utils.tensorboard import SummaryWriter
 
-writer = SummaryWriter("../data/runs/")
-
 # noinspection PyUnresolvedReferences
 matplotlib.style.use('ggplot')
 
@@ -34,6 +32,8 @@ torch.manual_seed(1)
 # ============ Open Config File =============== #
 with open("../config/config_tablesclass_BOW.json") as config:
     cf = json.load(config)
+
+writer = SummaryWriter(log_dir=("../data/runs/" + cf["run_name"]))
 
 # ============ Load and Check Tokenizer =========== #
 os.environ["TOKENIZERS_PARALLELISM"] = "false"

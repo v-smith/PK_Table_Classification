@@ -1,13 +1,13 @@
 {
-  "run_name": "CNN-NGRAM-Bootstrap-AugAll-",
+  "run_name": "CNN-test-bootstrap",
   "tokenizer_file": "../tokenizers/tokenizerPKtablesSpecialTokens5000.json",
   "max_len": 500,
   "num_classes":9,
-  "epochs":20,
+  "epochs":1,
   "batch_size":64,
   "val_batch_size":64,
   "n_workers":0,
-  "lr":0.001,
+  "lr":0.005,
   "embeds_size":100,
   "stride": 1,
   "input_channels": 1,
@@ -17,11 +17,11 @@
   "remove_html": true,
   "baseline_only": false,
   "sections_only": false,
-  "aug_all" : true,
+  "aug_all" : false,
   "aug_nums": false,
   "aug_syns": false,
   "aug_both": false,
   "sampler" : false,
-  "multi_hot": false
+  "multi_hot": true
 }
 

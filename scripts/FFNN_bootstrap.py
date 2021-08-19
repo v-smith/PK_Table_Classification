@@ -1,7 +1,7 @@
 # imports
 import numpy
 from sklearn.metrics import classification_report
-from data_loaders.bootstrap_data_loaders import get_dataloaders, read_dataset
+from data_loaders.bootstrap_data_loaders import read_dataset, get_dataloaders
 from data_loaders.models import NeuralNet, CNN
 import torch
 import torch.nn as nn
@@ -9,7 +9,6 @@ from transformers import PreTrainedTokenizerFast
 import matplotlib
 from tableclass_engine import validate, train, f1_nozeros
 import numpy as np
-import json
 import os
 from sklearn.utils import resample
 import matplotlib.pyplot as plt
@@ -34,11 +33,11 @@ STEPS
 torch.manual_seed(1)
 
 # ============ Open Config File =============== #
-# with open("../config/config_tableclass_FFNN.json") as config:
-# cf = json.load(config)
-
 with open("../config/config_tableclass_FFNN.json") as config:
     cf = json.load(config)
+
+#with open("../config/config_tableclass_CNN.json") as config:
+    #cf = json.load(config)
 
 # ============ Load and Check Tokenizer =========== #
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -67,11 +66,13 @@ train_samples = [{"html": dic["html"], "accept": dic["accept"]} for dic in train
 values = pd.DataFrame(train_samples).values
 
 # configure bootstrap
-n_iterations = 100
+n_iterations = 30
 n_size = int(len(train_samples) * 0.60)
 
 # run bootstrap
 all_stats = []
+all_stats_macro = []
+all_stats_micro = []
 best_stats = []
 perclass_stats = []
 
@@ -119,6 +120,7 @@ for i in tqdm(range(n_iterations)):
     all_val_f1_weighted = []
     all_train_f1_macro = []
     all_val_f1_macro = []
+    all_val_f1_micro = []
 
     for epoch in range(epochs):
         print("\n ===============================")
@@ -139,12 +141,8 @@ for i in tqdm(range(n_iterations)):
         val_class_report = classification_report(val_labels, val_predictions, output_dict=True)
         train_f1_positives_macro, train_f1_positives_weighted = f1_nozeros(train_class_report)
         val_f1_positives_macro, val_f1_positives_weighted = f1_nozeros(val_class_report)
-
-        # save loss at each training step
-        # writer.add_scalar("Loss/train", train_loss, epoch+1)
-        # writer.add_scalar("Loss/val", val_loss, epoch+1)
-        # writer.add_scalar("F1_weighted/train", train_f1_positives_weighted, epoch+1)
-        # writer.add_scalar("F1_weighted/val", val_f1_positives_weighted, epoch+1)
+        val_macro = val_class_report["macro avg"]["f1-score"]
+        val_micro = val_class_report["micro avg"]["f1-score"]
 
         # update metrics super list
         all_train_loss.append(train_loss)
@@ -152,36 +150,50 @@ for i in tqdm(range(n_iterations)):
         all_train_f1_weighted.append(train_f1_positives_weighted)
         all_val_f1_weighted.append(val_f1_positives_weighted)
         all_train_f1_macro.append(train_f1_positives_macro)
-        all_val_f1_macro.append(val_f1_positives_macro)
+        all_val_f1_macro.append(val_macro)
+        all_val_f1_micro.append(val_micro)
 
     val_class_report = classification_report(val_labels, val_predictions, output_dict=True)
 
     # final scores
     all_stats.append(all_val_f1_weighted)
+    all_stats_macro.append(all_val_f1_macro)
+    all_stats_micro.append(all_val_f1_micro)
     perclass_stats.append(val_class_report)
 
 max_stats = [max(lst) for lst in all_stats]
+max_stats_macro = [max(lst) for lst in all_stats_macro]
+max_stats_micro = [max(lst) for lst in all_stats_micro]
 data = max_stats
 n = list(np.arange(min(data), (max(data) + 0.01), 0.01))
 plt.hist(data, bins=n)
 plt.savefig("../data/outputs/bootstrap/hists/" + str(cf["run_name"]))
 plt.show()
 
+
 # confidence intervals
-alpha = 0.95
-lp = ((1.0 - alpha) / 2) * 100
-lower = max(0.0, numpy.percentile(max_stats, lp))
-up = (alpha + ((1.0 - alpha) / 2.0)) * 100
-upper = min(1.0, numpy.percentile(max_stats, up))
-median = np.median(max_stats)
-upper_percent = np.percentile(max_stats, 75)
-lower_percent = np.percentile(max_stats, 25)
-print('%.1f confidence interval %.1f%% and %.1f%%' % (alpha * 100, lower * 100, upper * 100))
+def calculate_CIs(stats):
+    alpha = 0.95
+    lp = ((1.0 - alpha) / 2) * 100
+    lower = max(0.0, numpy.percentile(stats, lp))
+    up = (alpha + ((1.0 - alpha) / 2.0)) * 100
+    upper = min(1.0, numpy.percentile(stats, up))
+    median = np.median(stats)
+    print('%.1f confidence interval %.1f%% and %.1f%%' % (alpha * 100, lower * 100, upper * 100))
+    return median, upper, lower
+
+
+median, upper, lower = calculate_CIs(max_stats)
+median_macro, upper_macro, lower_macro = calculate_CIs(max_stats_macro)
+median_micro, upper_micro, lower_micro = calculate_CIs(max_stats_micro)
 
 # perclass stats
 per_class_stats_processed = []
-for num in range(0,9):
-    num_list = [[v for k,v in dic.items() if k == str(num)] for dic in perclass_stats]
+alpha = 0.95
+lp = ((1.0 - alpha) / 2) * 100
+up = (alpha + ((1.0 - alpha) / 2.0)) * 100
+for num in range(0, 9):
+    num_list = [[v for k, v in dic.items() if k == str(num)] for dic in perclass_stats]
     num_list = [item for sublist in num_list for item in sublist]
     class_supports = [x["support"] for x in num_list]
     class_f1s = [x["f1-score"] for x in num_list]
@@ -198,9 +210,14 @@ for num in range(0,9):
 with open("../data/outputs/bootstrap/bootstrap.json") as feedsjson:
     feeds = json.load(feedsjson)
     name = str(cf["run_name"]) + str(n_iterations)
-    entry = {"name": name, "bootstrap_results": max_stats, "upper_CI": upper, "lower_CI": lower, "median": median,
-             "25th_percentile": lower_percent, "75th_percentile": upper_percent,
+    entry = {"name": name, "bootstrap_results": max_stats, "bootstrap_macro": max_stats_macro,
+             "bootstrap_micro": max_stats_micro,
+             "upper_CI": upper, "lower_CI": lower, "median": median,
+             "median_macro": median_macro, "upper_percent_macro": upper_macro, "lower_percent_macro": lower_macro,
+             "median_micro": median_micro, "upper_percent_micro": upper_micro, "lower_percent_micro": lower_micro,
              "per_class_stats_ready": per_class_stats_processed}
     feeds.append(entry)
 with open("../data/outputs/bootstrap/bootstrap.json", mode='w') as f:
     f.write(json.dumps(feeds, indent=2))
+
+a = 1

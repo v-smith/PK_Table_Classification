@@ -1,24 +1,24 @@
 {
-  "run_name": "FFNN-500tokens-html-",
+  "run_name": "FFNN_boostrap-test-",
   "tokenizer_file": "../tokenizers/tokenizerPKtablesSpecialTokens5000.json",
   "max_len": 500,
   "num_classes":9,
   "hidden_size":100,
-  "epochs":50,
+  "epochs":20,
   "batch_size":64,
   "val_batch_size":64,
   "n_workers":0,
   "lr":0.01,
   "embeds_size":100,
   "drop_out": 0.25,
-  "remove_html": false,
+  "remove_html": true,
   "baseline_only": false,
   "sections_only": false,
   "aug_all" : false,
   "aug_nums": false,
   "aug_syns": false,
   "aug_both": false,
-  "sampler" : false,
-  "multi_hot": false
+  "sampler" : true,
+  "multi_hot": true
 }
 
