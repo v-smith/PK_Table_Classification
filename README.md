@@ -1,5 +1,7 @@
 #Pytorch Model Building 
 
+Classify Tables from Pharmacokinetic Literature on PubMed using a MLP and CNN. 
+
 To run tensor board: 
 ```
 cd data
