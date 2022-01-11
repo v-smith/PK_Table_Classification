@@ -1,27 +1,28 @@
 {
-  "run_name": "CNN-test-bootstrap",
+  "run_name": "Final-Best-",
   "tokenizer_file": "../tokenizers/tokenizerPKtablesSpecialTokens5000.json",
   "max_len": 500,
   "num_classes":9,
-  "epochs":1,
-  "batch_size":64,
-  "val_batch_size":64,
+  "epochs":15,
+  "batch_size":32,
+  "val_batch_size":32,
   "n_workers":0,
-  "lr":0.005,
-  "embeds_size":100,
+  "lr":0.01,
+  "embeds_size":50,
   "stride": 1,
   "input_channels": 1,
   "num_filters": 100,
   "filter_sizes": [1,2,3,5],
-  "drop_out": 0.25,
+  "drop_out": 0.1,
   "remove_html": true,
   "baseline_only": false,
   "sections_only": false,
   "aug_all" : false,
-  "aug_nums": false,
+  "aug_nums": true,
   "aug_syns": false,
   "aug_both": false,
-  "sampler" : false,
-  "multi_hot": true
+  "sampler" : true,
+  "multi_hot": false
 }
+
 

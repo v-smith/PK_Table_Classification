@@ -45,7 +45,7 @@ def convert_labels(inp_labels: List[List[str]]):
     return all_transformed_labels
 
 
-def preprocess_htmls(inp_samples: List[str], remove_html=bool):
+def preprocess_htmls(inp_samples: List[str], remove_html:bool):
     """Remove style etc. from html tables"""
     processed_htmls = []
     for html in inp_samples:
@@ -103,11 +103,9 @@ def extract_all_ids_withoutpad(html_encodings: List[List[int]]):
 
 class PKDataset(Dataset):
 
-    def __init__(self, encodings, labels, task_hash, input_hash):
+    def __init__(self, encodings, labels):
         self.encodings = encodings
         self.labels = labels
-        self.task_hash = task_hash
-        self.input_hash = input_hash
 
     # support indexing such that dataset[i] can be used to get i-th sample
     def __getitem__(self, index):
@@ -115,15 +113,13 @@ class PKDataset(Dataset):
         item["input_ids"] = torch.tensor(self.encodings[index])  # bow
         item["labels"] = torch.tensor(self.labels[index]).type(
             torch.float32)  # torch.DoubleTensor # size [n_samples, n_labels]
-        item["_task_hash"] = self.task_hash[index]
-        item["_input_hash"] = self.input_hash[index]
         return item
 
     def __len__(self):
         return len(self.labels)
 
 
-def process_table_data(inp_samples: List[Dict], inp_tokenizer: str, remove_html: bool, baseline_only: bool) -> PKDataset:
+def process_table_data(inp_samples: List[Dict], inp_tokenizer: str, baseline_only: bool, remove_5s: bool) -> PKDataset:
     """
     Generates a pytorch dataset containing encoded tokens and labels
     """
@@ -132,20 +128,14 @@ def process_table_data(inp_samples: List[Dict], inp_tokenizer: str, remove_html:
     if baseline_only:
         prepro_htmls = title_header_cols(inp_samples=htmls)
     else:
-        prepro_htmls = preprocess_htmls(inp_samples=htmls, remove_html=remove_html)
+        prepro_htmls = preprocess_htmls(inp_samples=htmls, remove_html=True)
 
     labels = [sample["accept"] for sample in inp_samples]
-    train_labels= labels[:1500]
-    train_labels = convert_labels(inp_labels=train_labels)
-    val_labels= labels[1500:1833]
-    val_labels= convert_labels(inp_labels=val_labels)
-    test_labels= labels[1833:]
-    test_labels = convert_labels_5s(inp_labels=test_labels)
+    if remove_5s:
+        labels = convert_labels_5s(inp_labels=labels)
+    else:
+        labels = convert_labels(inp_labels=labels)
 
-    task_hash = [sample["_task_hash"] for sample in inp_samples]
-    input_hash = [sample["_input_hash"] for sample in inp_samples]
-
-    #
     tokenizer = PreTrainedTokenizerFast(tokenizer_file=inp_tokenizer)
     vocab = tokenizer.vocab
     table_encodings = tokenizer(prepro_htmls)
@@ -154,35 +144,31 @@ def process_table_data(inp_samples: List[Dict], inp_tokenizer: str, remove_html:
     strs = [" ".join(x) for x in tokens]
 
     # tfidf
-    vectorizer = TfidfVectorizer(max_features=5000, vocabulary=vocab, lowercase=False, preprocessor=None)
-    vector = vectorizer.fit_transform(strs)
-
-    # CountVectorizer (BOW)
-    #vectorizer = CountVectorizer(max_features=5000, vocabulary=vocab,lowercase=False, preprocessor=None)
+    #vectorizer = TfidfVectorizer(max_features=5000, vocabulary=vocab, lowercase=False, preprocessor=None)
     #vector = vectorizer.fit_transform(strs)
 
-    train = vector[:1500].toarray()
-    val = vector[1500:1833].toarray()
-    test = vector[1833:].toarray()
+    # CountVectorizer (BOW)
+    vectorizer = CountVectorizer(max_features=5000, vocabulary=vocab,lowercase=False, preprocessor=None)
+    vector = vectorizer.fit_transform(strs)
 
-    train_dataset = PKDataset(encodings=train, labels=train_labels, task_hash=task_hash[:1500], input_hash=input_hash[:1500])
-    val_dataset = PKDataset(encodings=val, labels=val_labels, task_hash=task_hash[1500:1833], input_hash=input_hash[1500:1833])
-    test_dataset = PKDataset(encodings=test, labels=test_labels, task_hash=task_hash[1833:], input_hash=input_hash[1833:])
-    return train_dataset, val_dataset, test_dataset
+    arr = vector.toarray()
+    dataset = PKDataset(encodings=arr, labels=labels)
+    return dataset
 
 
-def make_dataloader(inp_samples: List[Dict], batch_size: int, n_workers: int, remove_html: bool,
-                    baseline_only: bool, remove_5s: bool, inp_tokenizer: str) -> [DataLoader, PKDataset]:
+def make_dataloader(inp_samples: List[Dict], batch_size: int, inp_tokenizer: str,
+                    shuffle: bool, n_workers: int, baseline_only: bool, remove_5s: bool) -> [DataLoader, PKDataset]:
 
-    train_dataset, val_dataset, test_dataset = process_table_data(inp_samples=inp_samples, remove_html=remove_html,
-                                                                  baseline_only=baseline_only,
-                                                                  inp_tokenizer=inp_tokenizer)
+    torch_dataset = process_table_data(inp_samples=inp_samples, inp_tokenizer=inp_tokenizer,
+                                       baseline_only=baseline_only, remove_5s=remove_5s)
 
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, num_workers=n_workers, shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, num_workers=n_workers)
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, num_workers=n_workers)
+    if shuffle:
+        loader = DataLoader(torch_dataset, batch_size=batch_size, num_workers=n_workers, shuffle=True)
 
-    return train_loader, train_dataset, val_loader, val_dataset, test_loader, test_dataset
+    else:
+        loader = DataLoader(torch_dataset, batch_size=batch_size, num_workers=n_workers)
+
+    return loader, torch_dataset
 
 
 class MultilabelBalancedRandomSampler(Sampler):
@@ -422,8 +408,8 @@ def augment_all(inp_samples: List[Dict]):
 
 # my_test_data = [{"html": "<html><table><th> Mg mg min ml/kg ml/kg Cmax, k el", "accept": [1, 2, 3, 4, 5]},{"html": "<html><table><th> blah blah <\html>", "accept": [1, 2, 3, 4, 5]}]
 
-def get_dataloaders(inp_data_dir: str, batch_size: int, n_workers: int, inp_tokenizer: str, remove_html: bool, baseline_only: bool,
-                    aug_all: bool, aug_nums: bool, aug_syns: bool) -> \
+def get_dataloaders(train_dataset: str, val_dataset: str, batch_size: int, n_workers: int, inp_tokenizer: str,
+                    remove_html: bool, baseline_only: bool) -> \
         Iterable[DataLoader]:
     """
     Function to generate data loaders
@@ -434,38 +420,27 @@ def get_dataloaders(inp_data_dir: str, batch_size: int, n_workers: int, inp_toke
     @param val_batch_size: batch size for the validation/test datasets
     @param n_workers: number of workers for the dataloader
     @return: pytorch data loaders
-    """
-    train_samples = list(read_dataset(data_dir_inp=inp_data_dir, dataset_name="train-corrected"))
-    valid_samples = list(read_dataset(data_dir_inp=inp_data_dir, dataset_name="val-corrected"))
-    test_samples = list(read_dataset(data_dir_inp=inp_data_dir, dataset_name="test-corrected"))
 
-    if aug_all:
-        augmented_samples = augment_all(train_samples)
-        train_samples.extend(augmented_samples)
-    if aug_nums:
-        augmented_samples = augment_nums(train_samples)
-        train_samples.extend(augmented_samples)
-    if aug_syns:
-        augmented_samples = augment_syns(train_samples)
-        train_samples.extend(augmented_samples)
+    """
+
+    train_samples = [{"html": x[0], "accept": x[1]} for x in train_dataset]
+    val_samples = [{"html": x[0], "accept": x[1]} for x in val_dataset]
+    #train_samples = list(read_dataset(data_dir_inp=inp_data_dir, dataset_name="train-corrected"))
+    #valid_samples = list(read_dataset(data_dir_inp=inp_data_dir, dataset_name="val-corrected"))
+    #test_samples = list(read_dataset(data_dir_inp=inp_data_dir, dataset_name="test-corrected"))
 
     print(f"Total Length of Train Samples is: {len(train_samples)}")
 
-    train_samples = [{"html": dic["html"], "accept": dic["accept"], "_task_hash": dic["_task_hash"],
-                      "_input_hash": dic["_input_hash"]} for dic in train_samples]
-    valid_samples = [{"html": dic["html"], "accept": dic["accept"], "_task_hash": dic["_task_hash"],
-                      "_input_hash": dic["_input_hash"]} for dic in valid_samples]
-    test_samples = [{"html": dic["html"], "accept": dic["accept"], "_task_hash": dic["_task_hash"],
-                     "_input_hash": dic["_input_hash"]} for dic in test_samples]
+    #train_samples = [{"html": dic["html"], "accept": dic["accept"], "_task_hash": dic["_task_hash"],
+                      #"_input_hash": dic["_input_hash"]} for dic in train_samples]
+    #valid_samples = [{"html": dic["html"], "accept": dic["accept"], "_task_hash": dic["_task_hash"],
+                      #"_input_hash": dic["_input_hash"]} for dic in val_samples]
+    #test_samples = [{"html": dic["html"], "accept": dic["accept"], "_task_hash": dic["_task_hash"],
+                     #"_input_hash": dic["_input_hash"]} for dic in val_samples]
 
-    all_samples = train_samples + valid_samples + test_samples
+    train_dataloader, train_dataset=  make_dataloader(inp_samples=train_samples, batch_size=batch_size, inp_tokenizer=inp_tokenizer,
+    shuffle=True, n_workers=n_workers, baseline_only=baseline_only, remove_5s=False)
+    valid_dataloader, valid_dataset= make_dataloader(inp_samples=val_samples, batch_size=batch_size, inp_tokenizer=inp_tokenizer,
+    shuffle=False, n_workers=n_workers, baseline_only=baseline_only, remove_5s=False)
 
-    train_dataloader, train_dataset, valid_dataloader, valid_dataset, test_dataloader, test_dataset = make_dataloader(
-        inp_samples=all_samples, batch_size=batch_size,
-        inp_tokenizer=inp_tokenizer,
-        n_workers=n_workers,
-        remove_html=remove_html,
-        baseline_only=baseline_only,
-        remove_5s=False)
-
-    return train_dataloader, train_dataset, valid_dataloader, valid_dataset, test_dataloader, test_dataset
+    return train_dataloader, train_dataset, valid_dataloader, valid_dataset

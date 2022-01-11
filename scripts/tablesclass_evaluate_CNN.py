@@ -1,6 +1,7 @@
 # imports
+from prodigy.components.db import connect
 from sklearn.metrics import classification_report
-from data_loaders.table_data_loaders import get_dataloaders
+from data_loaders.table_data_loaders import get_dataloaders, read_jsonl
 import torch
 from transformers import PreTrainedTokenizerFast
 import matplotlib
@@ -34,7 +35,6 @@ train_dataloader, train_dataset, valid_dataloader, valid_dataset, test_dataloade
     aug_all=cf["aug_all"], aug_nums=cf["aug_nums"], aug_syns=cf["aug_syns"], aug_both=cf["aug_both"],
     sampler=cf["sampler"], sections=cf["sections_only"], multi_hot=cf["multi_hot"])
 
-
 # ============ Set Device =============== #
 # device config
 device = 'cpu'
@@ -50,7 +50,7 @@ model = CNN(num_filters=cf["num_filters"], input_channels=cf["input_channels"],
 optimizer = torch.optim.Adam(model.parameters(), lr=cf["lr"])
 
 # load the model checkpoint
-model_checkpoint = torch.load("../data/outputs/model_saves/CNN-Ngram-AUGNUMS-RESAMPLE-model_best.pth.tar")
+model_checkpoint = torch.load("../data/outputs/model_saves/CNN-FinalBest-model_best.pth.tar")
 
 # load model weights state_dict and optimizer state dict
 model.load_state_dict(model_checkpoint['state_dict'])
@@ -64,7 +64,7 @@ with torch.no_grad():
     all_preds = []
     all_labs = []
     for i, batch in enumerate(test_dataloader):
-        input_ids, target = batch['input_ids'].to(device), batch['labels'] #batch["multi_hot"].to(device)
+        input_ids, target = batch['input_ids'].to(device), batch['labels']  # batch["multi_hot"].to(device)
 
         outputs = model(input_ids)
         outputs = torch.sigmoid(outputs).detach().cpu()
@@ -88,4 +88,69 @@ print(f"F1 Weighted (Positive Classes Only): {test_f1_positives_weighted} | "
       f"F1 not weighted (Macro and Positive Classes Only): {test_f1_positives_macro}")
 print(f"Classification Report: {test_class_report}")
 
-a=1
+a = 1
+
+# prepare prodigy dataset to compare labels and predicitions
+all_tokens = [np.asarray(item["input_ids"]) for item in test_dataset]
+htmls = [tokenizer.decode(tokens) for tokens in all_tokens]
+task_hashes = [item["_task_hash"] for item in test_dataset]
+input_hashes = [item["_input_hash"] for item in test_dataset]
+binary_labels = [item for item in all_labs]
+binary_preds = [item for item in all_preds]
+indices_labels = [np.where(item == 1)[0].tolist() for item in binary_labels]
+indices_preds = [np.where(item == 1)[0].tolist() for item in binary_preds]
+
+compare_labels = []
+compare_preds = []
+for table, label, pred, t_hash, i_hash in zip(htmls, indices_labels, indices_preds, task_hashes, input_hashes):
+    # if label != pred:
+    compare_labels.append(
+        {"html": table, "accept": label, "_task_hash": t_hash, "_input_hash": i_hash, "_session_id": "labels",
+         "answer": "accept", "_view_id": "blocks",
+         "options": [{"id": 0, "text": "NC Params"}, {"id": 1, "text": "C Params"}, {"id": 2, "text": "Param-cov Rs"},
+                     {"id": 3, "text": "Params Other"}, {"id": 4, "text": "Doses"},
+                     {"id": 5, "text": "Number of Subjects"}, {"id": 6, "text": "Samples Timings"},
+                     {"id": 7, "text": "Demographics"}, {"id": 8, "text": "Covariates Other"}],
+         "config": {"choice_style": "multiple"}})
+    compare_preds.append(
+        {"html": table, "accept": pred, "_task_hash": t_hash, "_input_hash": i_hash, "_session_id": "preds",
+         "answer": "accept", "_view_id": "blocks",
+         "options": [{"id": 0, "text": "NC Params"}, {"id": 1, "text": "C Params"}, {"id": 2, "text": "Param-cov Rs"},
+                     {"id": 3, "text": "Params Other"}, {"id": 4, "text": "Doses"},
+                     {"id": 5, "text": "Number of Subjects"}, {"id": 6, "text": "Samples Timings"},
+                     {"id": 7, "text": "Demographics"}, {"id": 8, "text": "Covariates Other"}],
+         "config": {"choice_style": "multiple"}})
+
+original_annotations = list(read_jsonl("../data/train-test-val/test-corrected.jsonl"))
+
+for d in compare_preds:
+    for d2 in original_annotations:
+        if d["_task_hash"] == d2["_task_hash"]:
+            d["html"] = d2["html"]
+
+for a in compare_labels:
+    for a2 in original_annotations:
+        if a["_task_hash"] == a2["_task_hash"]:
+            a["html"] = a2["html"]
+
+# with jsonlines.open("../data/" + "test-labels.jsonl", mode='w') as writer:
+# writer.write_all(compare_labels)
+
+# with jsonlines.open("../data/" + "compare-preds.jsonl", mode='w') as writer:
+# writer.write_all(compare_preds)
+
+db = connect()
+if db.get_dataset("labels"):
+    db.drop_dataset("labels")
+db.add_dataset("labels")
+db.add_examples(compare_labels, ["labels"])
+dataset_labs = db.get_dataset("labels")
+
+if db.get_dataset("predictions"):
+    db.drop_dataset("predictions")
+db.add_dataset("predictions")
+db.add_examples(compare_preds, ["predictions"])
+dataset_preds = db.get_dataset("predictions")
+print(f"===== length labels {len(dataset_labs)}, length of preds: {len(dataset_preds)}=====")
+
+a = 1

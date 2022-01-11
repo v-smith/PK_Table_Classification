@@ -15,10 +15,8 @@ import bs4 as bs
 from data_loaders.extract_baseline import findall_rownames, findall_colnames, join_info, join_section_info, findall_rows
 import random
 from torch.utils.data.sampler import Sampler
-from collections import Counter
-import functools
 
-matplotlib.style.use('ggplot')
+matplotlib.style.use('seaborn-whitegrid')
 
 
 # my_test_data= [{"html":"<html><table><th> blah blah <\html>", "accept":[1,2,3,4,5]}, {"html":"<html><table><th> blah blah <\html>", "accept":[1,2,3,4,5]}, {"html":"<html><table><th> blah blah <\html>", "accept":[1,2,3]}, {"html":"<html><table><th> blah blah <\html>", "accept":[1]}]

@@ -2,7 +2,8 @@
 import numpy
 from sklearn.metrics import classification_report
 from data_loaders.bootstrap_data_loaders import read_dataset, get_dataloaders
-from data_loaders.models import NeuralNet, CNN
+#from data_loaders.bow_data_loaders import get_dataloaders
+from data_loaders.models import NeuralNet, CNN, BOW_NeuralNet
 import torch
 import torch.nn as nn
 from transformers import PreTrainedTokenizerFast
@@ -33,11 +34,14 @@ STEPS
 torch.manual_seed(1)
 
 # ============ Open Config File =============== #
-with open("../config/config_tableclass_FFNN.json") as config:
-    cf = json.load(config)
-
-#with open("../config/config_tableclass_CNN.json") as config:
+#with open("../config/config_tablesclass_BOW.json") as config:
     #cf = json.load(config)
+
+#with open("../config/config_tableclass_FFNN.json") as config:
+    #cf = json.load(config)
+
+with open("../config/config_tableclass_CNN.json") as config:
+    cf = json.load(config)
 
 # ============ Load and Check Tokenizer =========== #
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -66,7 +70,7 @@ train_samples = [{"html": dic["html"], "accept": dic["accept"]} for dic in train
 values = pd.DataFrame(train_samples).values
 
 # configure bootstrap
-n_iterations = 30
+n_iterations = 100
 n_size = int(len(train_samples) * 0.60)
 
 # run bootstrap
@@ -86,6 +90,11 @@ for i in tqdm(range(n_iterations)):
     train_list = [x.tolist() for x in train_arr]
     test_list = [x.tolist() for x in test_arr]
 
+    #train_dataloader, train_dataset, valid_dataloader, valid_dataset = get_dataloaders(
+        #train_dataset=train_list, val_dataset=test_list, inp_tokenizer=cf["tokenizer_file"],
+        #n_workers=cf["n_workers"], remove_html=cf["remove_html"], baseline_only=cf["baseline_only"], batch_size=cf["batch_size"])
+
+
     train_dataloader, train_dataset, valid_dataloader, valid_dataset = get_dataloaders(
         train_dataset=train_list, val_dataset=test_list,
         inp_tokenizer="../tokenizers/tokenizerPKtablesSpecialTokens5000.json",
@@ -96,13 +105,16 @@ for i in tqdm(range(n_iterations)):
         sections=cf["sections_only"], multi_hot=cf["multi_hot"])
 
     # ============ Get Model =============== #
-    model = NeuralNet(num_classes=cf["num_classes"], embeds_size=cf["embeds_size"],
-                      vocab_size=vocab_size, padding_idx=padding_idx, hidden_size=cf["hidden_size"],
-                      drop_out=cf["drop_out"]).to(device)
+    #model = NeuralNet(num_classes=cf["num_classes"], embeds_size=cf["embeds_size"],
+                      #vocab_size=vocab_size, padding_idx=padding_idx, hidden_size=cf["hidden_size"],
+                      #drop_out=cf["drop_out"]).to(device)
 
-    #model = CNN(num_filters=cf["num_filters"], input_channels=cf["input_channels"],
-                #num_classes=cf["num_classes"], embeds_size=cf["embeds_size"], filter_sizes=cf["filter_sizes"],
-                #vocab_size=vocab_size, padding_idx=padding_idx, stride=cf["stride"], drop_out=cf["drop_out"]).to(device)
+    model = CNN(num_filters=cf["num_filters"], input_channels=cf["input_channels"],
+                num_classes=cf["num_classes"], embeds_size=cf["embeds_size"], filter_sizes=cf["filter_sizes"],
+                vocab_size=vocab_size, padding_idx=padding_idx, stride=cf["stride"], drop_out=cf["drop_out"]).to(device)
+
+    #model = BOW_NeuralNet(num_classes=cf["num_classes"], input_size=cf["input_size"],
+                          #hidden_size=cf["hidden_size"], drop_out=cf["drop_out"]).to(device)
 
     # ============ Define Loss and Optimiser =============== #
     criterion = nn.BCELoss()

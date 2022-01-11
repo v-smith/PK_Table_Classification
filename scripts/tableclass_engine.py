@@ -28,11 +28,11 @@ def train(model, dataloader, optimizer, criterion, train_data, device):
 
         input_ids = mini_batch['input_ids'].to(device)
         target = mini_batch['labels'].to(device)
-        multi_hots = mini_batch["multi_hot"].to(device)
+        #multi_hots = mini_batch["multi_hot"].to(device)
 
         optimizer.zero_grad()  # empties from memory
-        #logits = model(input_ids)
-        logits = model(input_ids, multi_hots)
+        logits = model(input_ids)
+        #logits = model(input_ids, multi_hots)
         # apply sigmoid activation to get all the outputs between 0 and 1
         outputs = torch.sigmoid(logits)
         loss = criterion(outputs, target)
@@ -70,11 +70,11 @@ def validate(model, dataloader, criterion, val_data, device):
             counter += 1
             input_ids = mini_batch['input_ids'].to(device)
             target = mini_batch['labels'].to(device)
-            multi_hots = mini_batch["multi_hot"].to(device)
+            #multi_hots = mini_batch["multi_hot"].to(device)
             # weight_rebal = torch.ones_like(target) / 95.0 + (1.0 - 1.0 / 95.0) * target
 
-            #logits = model(input_ids)
-            logits = model(input_ids, multi_hots)
+            logits = model(input_ids)
+            #logits = model(input_ids, multi_hots)
             # apply sigmoid activation to get all the outputs between 0 and 1
             outputs = torch.sigmoid(logits)
             loss = criterion(outputs, target)

@@ -1,10 +1,10 @@
 {
-  "run_name": "FFNN_boostrap-test-",
+  "run_name": "FFNN-boostrap-augall-macros",
   "tokenizer_file": "../tokenizers/tokenizerPKtablesSpecialTokens5000.json",
   "max_len": 500,
   "num_classes":9,
   "hidden_size":100,
-  "epochs":20,
+  "epochs":50,
   "batch_size":64,
   "val_batch_size":64,
   "n_workers":0,
@@ -14,11 +14,11 @@
   "remove_html": true,
   "baseline_only": false,
   "sections_only": false,
-  "aug_all" : false,
+  "aug_all" : true,
   "aug_nums": false,
   "aug_syns": false,
   "aug_both": false,
-  "sampler" : true,
-  "multi_hot": true
+  "sampler" : false,
+  "multi_hot": false
 }
 
