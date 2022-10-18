@@ -1,9 +1,9 @@
-from data_loaders.table_data_loaders import get_dataloaders
-from data_loaders.table_data_loaders import NeuralNet
 import torch
 import torch.nn as nn
 from transformers import PreTrainedTokenizerFast
-from tqdm import tqdm
+
+from data_loaders.table_data_loaders import NeuralNet
+from data_loaders.table_data_loaders import get_dataloaders
 
 # ============ Set a value =============== #
 torch.manual_seed(48)
@@ -14,11 +14,11 @@ tokenizer.add_special_tokens({'pad_token': '[PAD]'})
 
 # ============ Get data loaders =============== #
 
-train_dataloader, train_dataset, valid_dataloader, valid_dataset, test_dataloader, test_dataset = get_dataloaders(inp_data_dir="../data/train-test-val/",
-                                                                       inp_tokenizer="../tokenizers/tokenizerPKtablesSpecialTokens5000.json",
-                                                                       max_len=500, batch_size=50, val_batch_size=100,
-                                                                       n_workers=0)
-
+train_dataloader, train_dataset, valid_dataloader, valid_dataset, test_dataloader, test_dataset = get_dataloaders(
+    inp_data_dir="../data/train-test-val/",
+    inp_tokenizer="../tokenizers/tokenizerPKtablesSpecialTokens5000.json",
+    max_len=500, batch_size=50, val_batch_size=100,
+    n_workers=0)
 
 # ============ Set Config =============== #
 
@@ -39,8 +39,7 @@ torch.autograd.set_detect_anomaly(True)
 
 # ============ Get Model =============== #
 model = NeuralNet(input_size=input_size, num_classes=num_classes, embeds_size=embeds_size, vocab_size=vocab_size,
-                  padding_idx=padding_idx, hidden_size=hidden_size) #.to(device)
-
+                  padding_idx=padding_idx, hidden_size=hidden_size)  # .to(device)
 
 # ============ Define Loss and Optimiser =============== #
 criterion = nn.BCELoss()
@@ -54,8 +53,8 @@ for epoch in range(num_epochs):
     print(f"Epoch {epoch + 1} of {num_epochs}")
     epoch_loss = []
     for batch in train_dataloader:
-        input_ids = batch["input_ids"] #.to(device)
-        labels = batch["labels"] #.to(device)
+        input_ids = batch["input_ids"]  # .to(device)
+        labels = batch["labels"]  # .to(device)
 
         logits = model(x=input_ids)
         loss = criterion(logits, labels)
@@ -77,15 +76,15 @@ for epoch in range(num_epochs):
 with torch.no_grad():
     correct = 0.
     total = 0.
-    #work out how to initiate loop
+    # work out how to initiate loop
     for counter, batch in enumerate(test_dataloader):
         input_ids = batch['input_ids'].to(device)
         target = batch['labels']
         outputs = model(input_ids)
         outputs = torch.sigmoid(outputs).cpu()
-        #outputs = outputs.detach().cpu()
+        # outputs = outputs.detach().cpu()
         predicted = np.round(outputs)
-        total += target.size(0)  #try to understand this!!!
+        total += target.size(0)  # try to understand this!!!
         correct += (predicted == target).sum().item()
 accuracy = correct / total * 100
 print("Overall Accuracy: {}%".format(accuracy))

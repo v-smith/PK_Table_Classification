@@ -13,7 +13,7 @@ data_loaders/kfold_CV_data_loaders.py
 data_loaders/bootstrap_data_loaders.py
 ```
 
-3. To initially check model is working (can overfit to small sample): 
+3. To initially check model is working (check overfit to small sample): 
 ```
 scripts/tableclass_debugFFNN.py
 scripts/tableclass_debugBOW.py

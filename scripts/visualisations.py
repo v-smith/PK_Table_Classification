@@ -1,15 +1,16 @@
-import matplotlib.pyplot as plt
-import numpy as np
-import matplotlib
-from typing import Dict, List, Iterable
-from transformers import PreTrainedTokenizerFast
-from data_loaders.table_data_loaders import extract_all_ids_withoutpad, preprocess_htmls
-from collections import Counter
-import jsonlines
 import itertools
-from itertools import islice
 import operator
-from wordcloud import WordCloud, STOPWORDS, ImageColorGenerator
+from collections import Counter
+from itertools import islice
+from typing import Dict, List
+
+import jsonlines
+import matplotlib
+import matplotlib.pyplot as plt
+from transformers import PreTrainedTokenizerFast
+from wordcloud import WordCloud
+
+from data_loaders.table_data_loaders import extract_all_ids_withoutpad, preprocess_htmls
 
 matplotlib.style.use('ggplot')
 
@@ -18,7 +19,7 @@ with jsonlines.open("../data/train-test-val/test-corrected.jsonl") as reader:
     for obj in reader:
         json_list.append(obj)
 
-labels= [x["accept"] for x in json_list]
+labels = [x["accept"] for x in json_list]
 print(labels)
 
 
@@ -44,15 +45,17 @@ def plot_per_label(json_list: List[Dict], label: int):
     for key, value in counts.items():
         if key not in keys_to_be_deleted:
             final_counts[key] = value
-    #sorted_tuples = sorted(final_counts.items(), key=lambda item: item[1])
-    #sorted_counts = {k: v for k, v in sorted_tuples}
+    # sorted_tuples = sorted(final_counts.items(), key=lambda item: item[1])
+    # sorted_counts = {k: v for k, v in sorted_tuples}
     sorted_counts = dict(sorted(final_counts.items(), key=operator.itemgetter(1), reverse=True))
     print(sorted_counts)
     return sorted_counts
 
+
 def take(n, iterable):
     "Return first n items of the iterable as a list"
     return list(islice(iterable, n))
+
 
 def plot_label_stats(counts: Dict, label: int):
     """Plots total tokens per table"""
@@ -69,16 +72,18 @@ def plot_label_stats(counts: Dict, label: int):
     plt.show()
     plt.close()
 
+
 def plot_wordcloud(counts):
     keys = counts.keys()
     joined = ' '.join(keys)
     wordcloud = WordCloud(max_font_size=50, max_words=100, background_color="white").generate(joined)
     plt.imshow(wordcloud, interpolation='bilinear')
     plt.axis("off")
-    #wordcloud.to_file("img/first_review.png") #save
+    # wordcloud.to_file("img/first_review.png") #save
     plt.show()
+
 
 counts = plot_per_label(json_list, 0)
 plot_label_stats(counts, 0)
 plot_wordcloud(counts)
-a=1
+a = 1

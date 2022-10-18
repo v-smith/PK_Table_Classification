@@ -77,7 +77,7 @@ all_train_f1_weighted = []
 all_val_f1_weighted = []
 all_train_f1_macro = []
 all_val_f1_macro = []
-best_weightedf1= 0
+best_weightedf1 = 0
 
 for epoch in range(epochs):
     print(f"Epoch {epoch + 1} of {epochs}")
@@ -97,12 +97,12 @@ for epoch in range(epochs):
     val_f1_positives_macro, val_f1_positives_weighted = f1_nozeros(val_class_report)
 
     # save loss at each training step
-    writer.add_scalar("Loss/train", train_loss, epoch+1)
-    writer.add_scalar("Loss/val", val_loss, epoch+1)
-    writer.add_scalar("F1_weighted/train", train_f1_positives_weighted, epoch+1)
-    writer.add_scalar("F1_weighted/val", val_f1_positives_weighted, epoch+1)
+    writer.add_scalar("Loss/train", train_loss, epoch + 1)
+    writer.add_scalar("Loss/val", val_loss, epoch + 1)
+    writer.add_scalar("F1_weighted/train", train_f1_positives_weighted, epoch + 1)
+    writer.add_scalar("F1_weighted/val", val_f1_positives_weighted, epoch + 1)
 
-    #save checkpoint
+    # save checkpoint
     is_best = val_f1_positives_weighted > best_weightedf1
     best_weightedf1 = max(val_f1_positives_weighted, best_weightedf1)
     save_checkpoint({
@@ -120,9 +120,9 @@ for epoch in range(epochs):
     all_train_f1_macro.append(train_f1_positives_macro)
     all_val_f1_macro.append(val_f1_positives_macro)
 
-#make sure that all pending events have been written to disk
+# make sure that all pending events have been written to disk
 writer.flush()
-#close writer
+# close writer
 writer.close()
 
 # ========== Plot Results ============#
@@ -134,4 +134,4 @@ plot_loss_graph(all_train_loss, all_val_loss, cf)
 plot_f1_graph(all_train_f1_macro, all_val_f1_macro, cf, "- Positive Classes")
 plot_f1_graph(all_train_f1_weighted, all_val_f1_weighted, cf, "- Weighted Positive Classes")
 
-a=1
+a = 1

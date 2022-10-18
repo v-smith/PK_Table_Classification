@@ -1,17 +1,17 @@
 # imports
-from sklearn.metrics import classification_report
-from data_loaders.bow_data_loaders import get_dataloaders
-from data_loaders.models import BOW_NeuralNet
-import torch
-import torch.nn as nn
-from transformers import PreTrainedTokenizerFast
-import matplotlib
-from tableclass_engine import train, validate, label_wise_metrics, \
-    plot_loss_graph, plot_f1_graph, f1_nozeros, save_checkpoint
-import numpy as np
 import json
 import os
+
+import matplotlib
+import torch
+import torch.nn as nn
+from sklearn.metrics import classification_report
 from torch.utils.tensorboard import SummaryWriter
+from transformers import PreTrainedTokenizerFast
+
+from data_loaders.bow_data_loaders import get_dataloaders
+from data_loaders.models import BOW_NeuralNet
+from tableclass_engine import train, validate, plot_loss_graph, plot_f1_graph, f1_nozeros, save_checkpoint
 
 # noinspection PyUnresolvedReferences
 matplotlib.style.use('ggplot')
@@ -65,7 +65,7 @@ model = BOW_NeuralNet(num_classes=cf["num_classes"], input_size=cf["input_size"]
 
 # ============ Define Loss and Optimiser =============== #
 criterion = nn.BCELoss()  # reduction? weight=weights
-#criterion = nn.BCEWithLogitsLoss(pos_weight=weights, reduce=None)
+# criterion = nn.BCEWithLogitsLoss(pos_weight=weights, reduce=None)
 optimizer = torch.optim.Adam(model.parameters(), lr=cf["lr"])
 
 # ============ Train and Val Loop  =============== #
@@ -76,7 +76,7 @@ all_train_f1_weighted = []
 all_val_f1_weighted = []
 all_train_f1_macro = []
 all_val_f1_macro = []
-best_weightedf1= 0
+best_weightedf1 = 0
 
 for epoch in range(epochs):
     print(f"Epoch {epoch + 1} of {epochs}")
@@ -96,12 +96,12 @@ for epoch in range(epochs):
     val_f1_positives_macro, val_f1_positives_weighted = f1_nozeros(val_class_report)
 
     # save loss at each training step
-    writer.add_scalar("Loss/train", train_loss, epoch+1)
-    writer.add_scalar("Loss/val", val_loss, epoch+1)
-    writer.add_scalar("F1_weighted/train", train_f1_positives_weighted, epoch+1)
-    writer.add_scalar("F1_weighted/val", val_f1_positives_weighted, epoch+1)
+    writer.add_scalar("Loss/train", train_loss, epoch + 1)
+    writer.add_scalar("Loss/val", val_loss, epoch + 1)
+    writer.add_scalar("F1_weighted/train", train_f1_positives_weighted, epoch + 1)
+    writer.add_scalar("F1_weighted/val", val_f1_positives_weighted, epoch + 1)
 
-    #save checkpoint
+    # save checkpoint
     is_best = val_f1_positives_weighted > best_weightedf1
     best_weightedf1 = max(val_f1_positives_weighted, best_weightedf1)
     save_checkpoint({
@@ -119,10 +119,10 @@ for epoch in range(epochs):
     all_train_f1_macro.append(train_f1_positives_macro)
     all_val_f1_macro.append(val_f1_positives_macro)
 
-#make sure that all pending events have been written to disk
+# make sure that all pending events have been written to disk
 writer.flush()
-#close writer
-#writer.close()
+# close writer
+# writer.close()
 
 # ========== Plot Results and Save/ Tensor Board ============#
 
@@ -133,4 +133,4 @@ plot_loss_graph(all_train_loss, all_val_loss, cf)
 plot_f1_graph(all_train_f1_macro, all_val_f1_macro, cf, "- Positive Classes")
 plot_f1_graph(all_train_f1_weighted, all_val_f1_weighted, cf, "- Weighted Positive Classes")
 
-a=1
+a = 1

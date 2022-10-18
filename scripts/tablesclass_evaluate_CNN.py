@@ -1,16 +1,16 @@
 # imports
-from prodigy.components.db import connect
-from sklearn.metrics import classification_report
-from data_loaders.table_data_loaders import get_dataloaders, read_jsonl
-import torch
-from transformers import PreTrainedTokenizerFast
-import matplotlib
-from tableclass_engine import train, validate, \
-    plot_loss_graph, plot_f1_graph, f1_nozeros, save_checkpoint
 import json
 import os
-from data_loaders.models import CNN
+
 import numpy as np
+import torch
+from prodigy.components.db import connect
+from sklearn.metrics import classification_report
+from transformers import PreTrainedTokenizerFast
+
+from data_loaders.models import CNN
+from data_loaders.table_data_loaders import get_dataloaders, read_jsonl
+from tableclass_engine import f1_nozeros
 
 # ============ Open Config File =============== #
 with open("../config/config_tableclass_CNN.json") as config:

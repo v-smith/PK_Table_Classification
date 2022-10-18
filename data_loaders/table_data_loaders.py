@@ -18,9 +18,6 @@ from torch.utils.data.sampler import Sampler
 
 matplotlib.style.use('seaborn-whitegrid')
 
-
-# my_test_data= [{"html":"<html><table><th> blah blah <\html>", "accept":[1,2,3,4,5]}, {"html":"<html><table><th> blah blah <\html>", "accept":[1,2,3,4,5]}, {"html":"<html><table><th> blah blah <\html>", "accept":[1,2,3]}, {"html":"<html><table><th> blah blah <\html>", "accept":[1]}]
-
 def convert_labels_5s(inp_labels: List[List[str]]):
     """Transforms labels to vector of binary numbers"""
     mlb = MultiLabelBinarizer()
@@ -207,6 +204,7 @@ def process_table_data(inp_samples: List[Dict], inp_tokenizer: str, max_len: int
         prepro_htmls = prepro_htmls
 
     labels = [sample["accept"] for sample in inp_samples]
+    #print(labels[3])
     if remove_5s:
         labels = convert_labels_5s(inp_labels=labels)
     else:
@@ -224,7 +222,7 @@ def process_table_data(inp_samples: List[Dict], inp_tokenizer: str, max_len: int
 
     print(f"Number of tables : {len(table_ids_no_pad)}")
 
-    # get mutli-hot vectors:
+    # get multi-hot vectors:
     if mutli_hot:
         multi_hot_vectors = [get_multi_hot(lst, vocab=tokenizer.vocab) for lst in table_ids_no_pad]
         torch_dataset = PKDatasetMutli(encodings=table_encodings, mutli_hot=multi_hot_vectors, labels=labels,
@@ -234,9 +232,10 @@ def process_table_data(inp_samples: List[Dict], inp_tokenizer: str, max_len: int
 
     input_ids = table_encodings["input_ids"]
     check_tokens = [tokenizer.convert_ids_to_tokens(x) for x in input_ids]
-    print(check_tokens[1])
-    print(table_encodings.input_ids[1])
-    print(labels[1])
+    #print(labels[3])
+    #print(htmls[3])
+    #print(check_tokens[3])
+    #print(table_encodings.input_ids[3])
 
     return torch_dataset
 

@@ -1,22 +1,22 @@
-from sklearn.preprocessing import MultiLabelBinarizer
-import numpy as np
+import json
+import os
+import random
 import re
-import ujson
 from pathlib import Path
 from typing import Dict, List, Iterable
-from transformers import PreTrainedTokenizerFast
-from torch.utils.data import DataLoader, Dataset
-import matplotlib.pyplot as plt
-import matplotlib
-import torch
-import os
-import json
+
 import bs4 as bs
-from data_loaders.extract_baseline import findall_rownames, findall_colnames, join_info, join_section_info, findall_rows
-import random
+import matplotlib
+import matplotlib.pyplot as plt
+import numpy as np
+import torch
+import ujson
+from sklearn.preprocessing import MultiLabelBinarizer
+from torch.utils.data import DataLoader, Dataset
 from torch.utils.data.sampler import Sampler
-from collections import Counter
-import functools
+from transformers import PreTrainedTokenizerFast
+
+from data_loaders.extract_baseline import findall_rownames, findall_colnames, join_info, join_section_info, findall_rows
 
 matplotlib.style.use('ggplot')
 

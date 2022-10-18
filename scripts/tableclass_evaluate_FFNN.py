@@ -16,7 +16,7 @@ with open("../config/config_tableclass_FFNN.json") as config:
 # ============ Load and Check Tokenizer =========== #
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 tokenizer = PreTrainedTokenizerFast(tokenizer_file=cf["tokenizer_file"])
-#tokenizer.add_tokens(["[CAPTION]", "[FIRST_ROW]", "[FIRST_COL]", "[TABLE_BODY]"], special_tokens=True)
+# tokenizer.add_tokens(["[CAPTION]", "[FIRST_ROW]", "[FIRST_COL]", "[TABLE_BODY]"], special_tokens=True)
 tokenizer.add_special_tokens({'pad_token': '[PAD]'})
 
 # get vocab size and padding index
@@ -30,9 +30,9 @@ train_dataloader, train_dataset, valid_dataloader, valid_dataset, test_dataloade
     inp_tokenizer=cf["tokenizer_file"],
     max_len=cf["max_len"], batch_size=cf["batch_size"], val_batch_size=cf["val_batch_size"],
     n_workers=cf["n_workers"], remove_html=cf["remove_html"], baseline_only=cf["baseline_only"],
-    aug_all=cf["aug_all"], aug_nums=cf["aug_nums"], aug_syns=cf["aug_syns"], aug_both= cf["aug_both"], sampler=cf["sampler"],
-    sections=cf["sections_only"],  multi_hot=cf["multi_hot"])
-
+    aug_all=cf["aug_all"], aug_nums=cf["aug_nums"], aug_syns=cf["aug_syns"], aug_both=cf["aug_both"],
+    sampler=cf["sampler"],
+    sections=cf["sections_only"], multi_hot=cf["multi_hot"])
 
 # ============ Set Device =============== #
 # device config
@@ -44,7 +44,8 @@ torch.autograd.set_detect_anomaly(True)
 # ============ Get Model =============== #
 
 model = NeuralNet(num_classes=cf["num_classes"], embeds_size=cf["embeds_size"],
-                  vocab_size=vocab_size, padding_idx=padding_idx, hidden_size=cf["hidden_size"], drop_out=cf["drop_out"]).to(device)
+                  vocab_size=vocab_size, padding_idx=padding_idx, hidden_size=cf["hidden_size"],
+                  drop_out=cf["drop_out"]).to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=cf["lr"])
 
 # load the model checkpoint
@@ -62,9 +63,9 @@ with torch.no_grad():
     all_preds = []
     all_labs = []
     for i, batch in enumerate(test_dataloader):
-        input_ids, target = batch['input_ids'].to(device), batch['labels'] #multi_hot, #batch["multi_hot"].to(device),
+        input_ids, target = batch['input_ids'].to(device), batch['labels']  # multi_hot, #batch["multi_hot"].to(device),
 
-        outputs = model(input_ids) #multi_hot
+        outputs = model(input_ids)  # multi_hot
         outputs = torch.sigmoid(outputs).detach().cpu()
         predicted = torch.round(outputs)
 
@@ -86,7 +87,7 @@ print(f"F1 Weighted (Positive Classes Only): {test_f1_positives_weighted} | "
       f"F1 not weighted (Macro and Positive Classes Only): {test_f1_positives_macro}")
 print(f"Classification Report: {test_class_report}")
 
-a=1
+a = 1
 '''
 #prepare prodigy dataset to compare labels and predicitions
 all_tokens = [np.asarray(item["input_ids"]) for item in test_dataset]
@@ -138,4 +139,4 @@ db.add_examples(compare_preds, ["predictions"])
 dataset_preds = db.get_dataset("predictions")
 print(f"===== length labels {len(dataset_labs)}, length of preds: {len(dataset_preds)}=====")
 '''
-a=1
+a = 1

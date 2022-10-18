@@ -38,9 +38,9 @@ train_dataloader, train_dataset, valid_dataloader, valid_dataset, test_dataloade
     inp_tokenizer="../tokenizers/tokenizerPKtablesSpecialTokens5000.json",
     max_len=cf["max_len"], batch_size=cf["batch_size"], val_batch_size=cf["val_batch_size"],
     n_workers=cf["n_workers"], remove_html=cf["remove_html"], baseline_only=cf["baseline_only"],
-    aug_all=cf["aug_all"], aug_nums=cf["aug_nums"], aug_syns=cf["aug_syns"], aug_both=cf["aug_both"], sampler=cf["sampler"],
+    aug_all=cf["aug_all"], aug_nums=cf["aug_nums"], aug_syns=cf["aug_syns"], aug_both=cf["aug_both"],
+    sampler=cf["sampler"],
     sections=cf["sections_only"], multi_hot=cf["multi_hot"])
-
 
 # ============ Set Device =============== #
 # device config
@@ -51,7 +51,8 @@ torch.autograd.set_detect_anomaly(True)
 
 # ============ Get Model =============== #
 model = NeuralNet(num_classes=cf["num_classes"], embeds_size=cf["embeds_size"],
-                  vocab_size=vocab_size, padding_idx=padding_idx, hidden_size=cf["hidden_size"], drop_out=cf["drop_out"]).to(device)
+                  vocab_size=vocab_size, padding_idx=padding_idx, hidden_size=cf["hidden_size"],
+                  drop_out=cf["drop_out"]).to(device)
 
 # ============ Define Loss and Optimiser =============== #
 criterion = nn.BCELoss()  # functional.binary_cross_entropy
@@ -60,11 +61,11 @@ optimizer = torch.optim.Adam(model.parameters(), lr=cf["lr"])
 # ============ Train and Val Loop  =============== #
 
 epochs = cf["epochs"]
-all_val_loss= []
-all_val_f1= []
+all_val_loss = []
+all_val_f1 = []
 all_f1_macro_positives = []
 all_f1_weighted_positives = []
-all_loss= []
+all_loss = []
 
 first_batch = next(iter(test_dataloader))
 for epoch in range(epochs):
@@ -87,4 +88,4 @@ plot_loss_graph(all_loss, all_val_loss, cf)
 plot_f1_graph(all_f1_macro_positives, all_val_f1, cf, "All Positive Macro")
 plot_f1_graph(all_f1_weighted_positives, all_val_f1, cf, "All Positive Weighted")
 
-a=1
+a = 1

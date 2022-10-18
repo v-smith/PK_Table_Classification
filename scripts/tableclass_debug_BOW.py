@@ -36,7 +36,6 @@ train_dataloader, train_dataset, valid_dataloader, valid_dataset, test_dataloade
     n_workers=cf["n_workers"], remove_html=cf["remove_html"], baseline_only=cf["baseline_only"],
     aug_all=cf["aug_all"], aug_nums=cf["aug_nums"], aug_syns=cf["aug_syns"])
 
-
 # ============ Set Device =============== #
 # device config
 device = 'cpu'
@@ -55,14 +54,14 @@ optimizer = torch.optim.Adam(model.parameters(), lr=cf["lr"])
 # ============ Train and Val Loop  =============== #
 
 epochs = cf["epochs"]
-all_val_loss= []
-all_val_f1= []
+all_val_loss = []
+all_val_f1 = []
 all_f1_macro = []
 all_f1_weighted = []
 all_f1_macro_positives = []
 all_f1_weighted_positives = []
 all_f1_notrel = []
-all_loss= []
+all_loss = []
 
 first_batch = next(iter(test_dataloader))
 for epoch in range(epochs):

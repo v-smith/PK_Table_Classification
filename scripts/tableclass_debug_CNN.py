@@ -58,11 +58,11 @@ optimizer = torch.optim.Adam(model.parameters(), lr=cf["lr"])
 # ============ Train and Val Loop  =============== #
 
 epochs = cf["epochs"]
-all_val_loss= []
-all_val_f1= []
+all_val_loss = []
+all_val_f1 = []
 all_f1_macro_positives = []
 all_f1_weighted_positives = []
-all_loss= []
+all_loss = []
 
 first_batch = next(iter(test_dataloader))
 for epoch in range(epochs):
@@ -85,4 +85,4 @@ plot_loss_graph(all_loss, all_val_loss, cf)
 plot_f1_graph(all_f1_macro_positives, all_val_f1, cf, "All Positive Macro")
 plot_f1_graph(all_f1_weighted_positives, all_val_f1, cf, "All Positive Weighted")
 
-a=1
+a = 1

@@ -29,7 +29,8 @@ def main(
     config['data_dir'] = str(data_dir)
     config['output_dir'] = str(output_dir)
     current_time = datetime.now().strftime('%d-%m-%Y-%H-%M-%S')
-    out_config_path = os.path.join(config['output_dir'], "model_saves", f"config-{config['run_name']}-{current_time}.json")
+    out_config_path = os.path.join(config['output_dir'], "model_saves",
+                                   f"config-{config['run_name']}-{current_time}.json")
     if not os.path.exists(os.path.join(config['output_dir'], "model_saves")):
         os.makedirs(os.path.join(config['output_dir'], "model_saves"))
 
@@ -85,8 +86,8 @@ def main(
         # check_val_every_n_epoch =1,
         # check_val_every_n_epoch=1,
         deterministic=True, log_every_n_steps=1,
-        #gradient_clip_val=config["gradient_clip_val"],
-        limit_train_batches=2, limit_val_batches=2 # JUST FOR QUICK DEBUGGING!
+        # gradient_clip_val=config["gradient_clip_val"],
+        limit_train_batches=2, limit_val_batches=2  # JUST FOR QUICK DEBUGGING!
     )
 
     if config['early_stopping']:
